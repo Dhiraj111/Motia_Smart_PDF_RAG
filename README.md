@@ -49,8 +49,6 @@ An intelligent, AI-powered document assistant that lets you chat with your PDF f
 
 ## 🏃‍♂️ Getting Started
 
-## 🚀 Getting Started
-
 ### 1. Prerequisites
 * Node.js (v18 or higher)
 * Pinecone API Key (Index dimension: **384**)
