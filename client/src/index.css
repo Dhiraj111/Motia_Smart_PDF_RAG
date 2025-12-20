@@ -2,3 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Markdown Styles for Chat */
+.prose {
+    font-size: 15px;
+    line-height: 1.6;
+}
+.prose ul {
+    list-style-type: disc;
+    padding-left: 20px;
+    margin: 10px 0;
+}
+.prose ol {
+    list-style-type: decimal;
+    padding-left: 20px;
+    margin: 10px 0;
+}
+.prose strong {
+    font-weight: 700;
+    color: #1a1a1a;
+}
+.prose p {
+    margin-bottom: 10px;
+}
+.prose p:last-child {
+    margin-bottom: 0;
+}
+.prose code {
+    background: #f1f1f1;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+}

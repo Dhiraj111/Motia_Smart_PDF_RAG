@@ -1,11 +1,46 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, FileUp, Loader2, Bot, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
+
+// --- NEW COMPONENT: Handles Typewriter + Markdown ---
+const BotMessage = ({ content, isNew }: { content: string, isNew: boolean }) => {
+  const [displayedContent, setDisplayedContent] = useState(isNew ? "" : content);
+  const hasStarted = useRef(false);
+
+  useEffect(() => {
+    if (!isNew || hasStarted.current) {
+        setDisplayedContent(content); // Show instantly if not new
+        return;
+    }
+
+    hasStarted.current = true;
+    let i = 0;
+    const speed = 15; // Speed in ms (lower is faster)
+
+    const timer = setInterval(() => {
+      if (i < content.length) {
+        setDisplayedContent((prev) => prev + content.charAt(i));
+        i++;
+      } else {
+        clearInterval(timer);
+      }
+    }, speed);
+
+    return () => clearInterval(timer);
+  }, [content, isNew]);
+
+  return (
+    <div className="prose">
+        <ReactMarkdown>{displayedContent}</ReactMarkdown>
+    </div>
+  );
+};
 
 function App() {
   const [fileId, setFileId] = useState<string | null>(null);
@@ -17,10 +52,10 @@ function App() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom whenever messages change
+  // Auto-scroll to bottom whenever messages (or typing) updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -28,46 +63,29 @@ function App() {
 
     setIsUploading(true);
     setUploadStatus("Initializing upload...");
-    setMessages([]); // Clear chat on new file
+    setMessages([]);
 
     try {
-      // 1. Create a unique ID for this file session
       const newFileId = crypto.randomUUID();
       setFileId(newFileId);
 
-      // 2. Chunk Upload Logic
-      const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
+      const CHUNK_SIZE = 1 * 1024 * 1024;
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
       for (let i = 0; i < totalChunks; i++) {
         const start = i * CHUNK_SIZE;
         const end = Math.min(file.size, start + CHUNK_SIZE);
         const chunk = file.slice(start, end);
-
-        // Convert chunk to Base64
         const base64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.readAsDataURL(chunk);
-            reader.onload = () => {
-                const result = reader.result as string;
-                resolve(result.split(',')[1]);
-            };
+            reader.onload = () => resolve((reader.result as string).split(',')[1]);
         });
 
-        // Update UI
         setUploadStatus(`Uploading chunk ${i + 1} of ${totalChunks}...`);
-
-        // Send to Backend
-        await axios.post('/upload', {
-            fileId: newFileId,
-            fileName: file.name,
-            chunkIndex: i,
-            totalChunks,
-            dataBase64: base64
-        });
+        await axios.post('/upload', { fileId: newFileId, fileName: file.name, chunkIndex: i, totalChunks, dataBase64: base64 });
       }
 
-      // 3. Polling Logic (Wait for Python Worker)
       setUploadStatus("⏳ Waiting for AI indexing...");
       
       const pollInterval = setInterval(async () => {
@@ -77,12 +95,11 @@ function App() {
                 clearInterval(pollInterval);
                 setUploadStatus("✅ Ready!");
                 setIsUploading(false);
-                setMessages([{ role: 'assistant', content: "I've read your PDF! What would you like to know?" }]);
+                // Add initial greeting
+                setMessages([{ role: 'assistant', content: "I've read your PDF! **Ask me anything.**" }]);
             }
-        } catch (err) {
-            console.error("Polling error", err);
-        }
-      }, 2000); // Check every 2 seconds
+        } catch (err) { console.error(err); }
+      }, 2000);
 
     } catch (err) {
       console.error(err);
@@ -105,9 +122,9 @@ function App() {
         fileId
       });
       
+      // Add the AI response
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.answer }]);
     } catch (err) {
-      console.error(err);
       setMessages(prev => [...prev, { role: 'assistant', content: "❌ Error connecting to server." }]);
     } finally {
       setIsLoading(false);
@@ -124,25 +141,19 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               📚 Motia PDF Chat
             </h1>
-            
-            {/* STATUS BADGE */}
             {uploadStatus === "✅ Ready!" && (
                 <span className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">
                     <CheckCircle2 size={14} /> Ready
                 </span>
             )}
           </div>
-          
-          {/* UPLOAD AREA */}
           <div className="mt-6 flex items-center gap-4">
             <label className={`flex items-center gap-2 px-5 py-2.5 bg-black text-white rounded-lg cursor-pointer hover:bg-gray-800 transition shadow-lg hover:shadow-xl ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
               {isUploading ? <Loader2 size={18} className="animate-spin" /> : <FileUp size={18} />}
               <span className="font-medium">Upload PDF</span>
               <input type="file" className="hidden" onChange={handleUpload} accept=".pdf" disabled={isUploading} />
             </label>
-            <span className="text-sm text-gray-500 font-medium animate-pulse">
-                {isUploading ? uploadStatus : ""}
-            </span>
+            <span className="text-sm text-gray-500 font-medium animate-pulse">{isUploading ? uploadStatus : ""}</span>
           </div>
         </div>
 
@@ -164,7 +175,16 @@ function App() {
                   ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm' 
                   : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-tl-sm'
               }`}>
-                 <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                 {msg.role === 'user' ? (
+                     <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                 ) : (
+                     /* Use BotMessage for AI to get Typewriter + Markdown */
+                     <BotMessage 
+                        content={msg.content} 
+                        isNew={i === messages.length - 1} // Only type the LAST message
+                     />
+                 )}
+                 
                  {msg.role === 'assistant' && (
                      <div className="mt-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                          ✨ AI Answer
@@ -199,7 +219,7 @@ function App() {
           <button 
             onClick={sendMessage}
             disabled={!fileId || isUploading || isLoading}
-            className="p-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-md hover:shadow-lg active:scale-95"
+            className="p-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-md hover:shadow-lg"
           >
             <Send size={20} />
           </button>
