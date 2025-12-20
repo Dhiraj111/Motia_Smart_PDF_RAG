@@ -132,14 +132,13 @@
             const question = input.value.trim();
             if (!question || !currentFileId) return;
 
-            // 1. Add User Message to UI
-            addMessageToUI('user', question);
-            input.value = '';
+            input.value = ''; // Clear input immediately
 
-            // 2. Add to History Object
+            // STEP A: Show YOUR message (Blue/Right)
+            addMessageToUI('user', question);
             chatHistory.push({ role: 'user', content: question });
 
-            // 3. Show Loading
+            // STEP B: Show TEMPORARY AI message (Gray/Left)
             const loadingId = addMessageToUI('assistant', '<i>Thinking...</i>');
 
             try {
@@ -147,37 +146,46 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        messages: chatHistory, // SEND FULL HISTORY
+                        messages: chatHistory, 
                         fileId: currentFileId 
                     })
                 });
                 const data = await res.json();
                 
-                // 4. Update Assistant Message
+                // STEP C: Find the Gray Bubble and update it with the Answer
                 const answerDiv = document.getElementById(loadingId);
-                answerDiv.innerHTML = data.answer;
                 
-                // Add Sources if available
-                if (data.sources?.length) {
-                    answerDiv.innerHTML += `<div style="margin-top:8px; font-size:0.85em; color:#666; border-left: 2px solid #ccc; padding-left: 8px;">
-                        📝 Source: "${data.sources[0].metadata.text.substring(0, 100)}..."
-                    </div>`;
+                if (answerDiv) {
+                    answerDiv.innerHTML = data.answer;
+                    
+                    // Add Sources if available
+                    if (data.sources && data.sources.length > 0) {
+                        answerDiv.innerHTML += `<div style="margin-top:8px; font-size:0.85em; color:#666; border-left: 2px solid #ccc; padding-left: 8px;">
+                            📝 Source: "${data.sources[0].metadata.text.substring(0, 100)}..."
+                        </div>`;
+                    }
                 }
 
-                // 5. Save to History
                 chatHistory.push({ role: 'assistant', content: data.answer });
 
             } catch (e) {
-                document.getElementById(loadingId).innerHTML = "❌ Error getting answer.";
+                console.error(e);
+                const errorDiv = document.getElementById(loadingId);
+                if (errorDiv) errorDiv.innerHTML = "❌ Error getting answer.";
             }
         }
 
         function addMessageToUI(role, text) {
             const container = document.getElementById('chatContainer');
-            const id = 'msg-' + Date.now();
-            const bg = role === 'user' ? '#007bff' : '#eee';
-            const color = role === 'user' ? '#fff' : '#000';
-            const align = role === 'user' ? 'flex-end' : 'flex-start';
+            const id = 'msg-' + Date.now() + Math.random(); // Unique ID
+            
+            // STYLE LOGIC: 
+            // User = Blue Right
+            // Assistant = Gray Left
+            const isUser = role === 'user';
+            const bg = isUser ? '#007bff' : '#eee';
+            const color = isUser ? '#fff' : '#000';
+            const align = isUser ? 'flex-end' : 'flex-start';
 
             const html = `
                 <div style="display: flex; justify-content: ${align}; margin-bottom: 10px;">
