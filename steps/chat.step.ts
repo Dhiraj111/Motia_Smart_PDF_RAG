@@ -14,15 +14,18 @@ export const config: ApiRouteConfig = {
 let extractor: any = null;
 
 export const handler: Handler = async (req, { logger }) => {
-  // 1. EXTRACT fileId
-  const { question, fileId } = req.body;
+  // EXPECT 'messages' ARRAY NOW
+  const { messages, fileId } = req.body;
   
-  if (!question) return { status: 400, body: { error: 'Question required' } };
-  
-  // Optional: You can enforce fileId required if you want strict scoping
-  // if (!fileId) return { status: 400, body: { error: 'fileId required' } };
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return { status: 400, body: { error: 'Messages array required' } };
+  }
 
-  logger.info(`📝 Question: "${question}" for File: ${fileId || 'ALL'}`);
+  // 1. Get the LATEST question for Vector Search
+  const lastMessage = messages[messages.length - 1];
+  const question = lastMessage.content;
+
+  logger.info(`📝 New Question: "${question}" (History Length: ${messages.length})`);
 
   try {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -35,40 +38,40 @@ export const handler: Handler = async (req, { logger }) => {
       extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     }
 
+    // 2. Generate Vector for the LAST question only
     const output = await extractor(question, { pooling: 'mean', normalize: true });
     const queryVector = Array.from(output.data);
 
-    // 2. CONSTRUCT FILTER
-    // If fileId is present, we tell Pinecone: "Only match vectors where metadata.file_id == fileId"
+    // 3. Search Pinecone (Scoped to File)
     const filter = fileId ? { file_id: fileId } : undefined;
-
-    logger.info(`🔍 Searching Pinecone with Filter: ${JSON.stringify(filter)}`);
-
-    // 3. QUERY WITH FILTER
     const queryResponse = await index.query({
       vector: queryVector as number[],
       topK: 3,
       includeMetadata: true,
-      filter: filter, // <--- APPLY FILTER HERE
+      filter: filter,
     });
 
-    if (!queryResponse.matches || queryResponse.matches.length === 0) {
-      return { 
-        status: 200, 
-        body: { answer: "I couldn't find any relevant info in this specific PDF.", sources: [] } 
-      };
-    }
+    const contextText = queryResponse.matches?.map((m: any) => m.metadata?.text).join('\n---\n') || '';
 
-    const contextText = queryResponse.matches
-      .map((match: any) => match.metadata?.text || '')
-      .join('\n\n---\n\n');
+    // 4. Construct Full Conversation for Groq
+    // SYSTEM PROMPT + HISTORY + NEW CONTEXT
+    const finalMessages = [
+      { 
+        role: 'system', 
+        content: `You are a helpful AI assistant. Use the following context to answer the user's question. 
+        
+        CONTEXT:
+        ${contextText}
+        
+        If the answer is not in the context, say "I don't see that in the document."` 
+      },
+      ...messages // Spread the full history here
+    ];
 
+    logger.info('🤖 Asking Groq with History...');
+    
     const completion = await groq.chat.completions.create({
-      messages: [
-        { role: 'system', content: 'You are a helpful assistant. Answer the user question using ONLY the context provided below.' },
-        { role: 'system', content: `Context:\n${contextText}` },
-        { role: 'user', content: question },
-      ],
+      messages: finalMessages as any,
       model: 'llama-3.3-70b-versatile',
     });
 
@@ -81,6 +84,6 @@ export const handler: Handler = async (req, { logger }) => {
 
   } catch (error: any) {
     logger.error('Chat Failed', { error: error.message });
-    return { status: 500, body: { error: `Server Error: ${error.message}` } };
+    return { status: 500, body: { error: error.message } };
   }
 };

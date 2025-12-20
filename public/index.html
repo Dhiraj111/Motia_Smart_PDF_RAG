@@ -43,27 +43,40 @@
 </head>
 
 <body>
-    <h1>📚 Motia PDF RAG</h1>
+    <div style="max-width: 800px; margin: 0 auto; padding: 20px; font-family: sans-serif;">
+        <h1>📚 Motia PDF Chat</h1>
 
-    <div class="container">
-        <div style="border-bottom: 1px solid #eee; padding-bottom: 2rem;">
+        <div style="background: #f4f4f4; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
             <h3>1. Upload PDF</h3>
-            <input type="file" id="fileInput" accept=".pdf">
-            <button onclick="uploadFile()">Upload & Process</button>
-            <p id="uploadStatus"></p>
+            <input type="file" id="fileInput" accept="application/pdf" />
+            <button onclick="uploadFile()" style="padding: 10px 20px; background: #000; color: #fff; border: none; cursor: pointer;">
+                Upload & Process
+            </button>
+            <div id="uploadStatus" style="margin-top: 10px; color: #555;"></div>
         </div>
 
-        <div>
-            <h3>2. Ask Question</h3>
-            <textarea id="questionInput" placeholder="What is this document about?"></textarea>
-            <button onclick="askQuestion()">Ask</button>
-            <div id="answerArea" class="response" style="display:none;"></div>
+        <div style="border: 1px solid #ddd; border-radius: 8px; height: 500px; display: flex; flex-direction: column;">
+            
+            <div id="chatContainer" style="flex: 1; overflow-y: auto; padding: 20px; background: #fff;">
+                <div style="color: #888; text-align: center; margin-top: 100px;">
+                    Upload a PDF to start chatting!
+                </div>
+            </div>
+
+            <div style="padding: 20px; background: #f9f9f9; border-top: 1px solid #ddd; display: flex; gap: 10px;">
+                <input type="text" id="questionInput" placeholder="Ask a question about the PDF..." 
+                    style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px;"
+                    onkeypress="if(event.key === 'Enter') askQuestion()">
+                <button onclick="askQuestion()" 
+                    style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Send
+                </button>
+            </div>
         </div>
     </div>
-
     <script>
-        // GLOBAL VARIABLE TO STORE CURRENT FILE ID
-        let currentFileId = null; 
+        let currentFileId = null;
+        let chatHistory = []; // STORE CONVERSATION HERE
 
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
@@ -73,11 +86,14 @@
             const status = document.getElementById('uploadStatus');
             status.innerText = "Initializing upload...";
 
-            // Generate ID here so frontend knows it immediately
             const fileId = crypto.randomUUID();
-            currentFileId = fileId; // SAVE IT!
+            currentFileId = fileId; 
+            
+            // RESET CHAT HISTORY ON NEW UPLOAD
+            chatHistory = []; 
+            document.getElementById('chatContainer').innerHTML = '<div style="color: #28a745; text-align: center; margin: 20px;">✅ New PDF Ready! Ask away.</div>';
 
-            const CHUNK_SIZE = 10 * 1024; // 10KB
+            const CHUNK_SIZE = 10 * 1024; 
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
             try {
@@ -85,74 +101,88 @@
                     const start = i * CHUNK_SIZE;
                     const end = Math.min(file.size, start + CHUNK_SIZE);
                     const chunk = file.slice(start, end);
-                    const base64 = await new Promise((resolve) => {
+                    const base64 = await new Promise((r) => {
                         const reader = new FileReader();
                         reader.readAsDataURL(chunk);
-                        reader.onload = () => resolve(reader.result.split(',')[1]);
+                        reader.onload = () => r(reader.result.split(',')[1]);
                     });
 
                     status.innerText = `Uploading chunk ${i + 1} of ${totalChunks}...`;
-                    
-                    const res = await fetch('/upload', {
+                    await fetch('/upload', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            fileId, // Send our generated ID
-                            fileName: file.name,
-                            chunkIndex: i,
-                            totalChunks,
-                            dataBase64: base64
-                        })
+                        body: JSON.stringify({ fileId, fileName: file.name, chunkIndex: i, totalChunks, dataBase64: base64 })
                     });
-
-                    if (!res.ok) throw new Error("Chunk upload failed");
                 }
-
-                status.innerText = "✅ Upload Complete! Processing... (File ID: " + fileId + ")";
-                
+                status.innerText = "✅ Upload Complete! (ID: " + fileId + ")";
             } catch (e) {
                 console.error(e);
-                status.innerText = "❌ Network error or upload failed.";
+                status.innerText = "❌ Upload failed.";
             }
         }
 
         async function askQuestion() {
-            const question = document.getElementById('questionInput').value;
-            const answerArea = document.getElementById('answerArea');
-            
-            // VALIDATION: Ensure a file is uploaded first
-            if (!currentFileId) {
-                alert("Please upload a PDF first!");
-                return;
-            }
+            const input = document.getElementById('questionInput');
+            const question = input.value.trim();
+            if (!question || !currentFileId) return;
 
-            answerArea.style.display = 'block';
-            answerArea.innerHTML = "<i>Thinking...</i>";
+            // 1. Add User Message to UI
+            addMessageToUI('user', question);
+            input.value = '';
+
+            // 2. Add to History Object
+            chatHistory.push({ role: 'user', content: question });
+
+            // 3. Show Loading
+            const loadingId = addMessageToUI('assistant', '<i>Thinking...</i>');
 
             try {
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        question, 
-                        fileId: currentFileId // <--- SEND THE ID
+                        messages: chatHistory, // SEND FULL HISTORY
+                        fileId: currentFileId 
                     })
                 });
                 const data = await res.json();
                 
-                let html = `<strong>🤖 Answer:</strong><br>${data.answer}<br><br>`;
+                // 4. Update Assistant Message
+                const answerDiv = document.getElementById(loadingId);
+                answerDiv.innerHTML = data.answer;
                 
-                if (data.sources && data.sources.length > 0) {
-                    html += `<div style="background:#eef; padding:10px; font-size:0.9em; border-left:3px solid #55a;">
-                        <strong>📚 Source Context Used:</strong><br>
-                        "<em>${data.sources[0].metadata.text.substring(0, 200)}...</em>"
+                // Add Sources if available
+                if (data.sources?.length) {
+                    answerDiv.innerHTML += `<div style="margin-top:8px; font-size:0.85em; color:#666; border-left: 2px solid #ccc; padding-left: 8px;">
+                        📝 Source: "${data.sources[0].metadata.text.substring(0, 100)}..."
                     </div>`;
                 }
-                
-                answerArea.innerHTML = html;
+
+                // 5. Save to History
+                chatHistory.push({ role: 'assistant', content: data.answer });
+
             } catch (e) {
-                answerArea.innerText = "❌ Error getting answer.";
+                document.getElementById(loadingId).innerHTML = "❌ Error getting answer.";
             }
+        }
+
+        function addMessageToUI(role, text) {
+            const container = document.getElementById('chatContainer');
+            const id = 'msg-' + Date.now();
+            const bg = role === 'user' ? '#007bff' : '#eee';
+            const color = role === 'user' ? '#fff' : '#000';
+            const align = role === 'user' ? 'flex-end' : 'flex-start';
+
+            const html = `
+                <div style="display: flex; justify-content: ${align}; margin-bottom: 10px;">
+                    <div id="${id}" style="max-width: 70%; padding: 10px 15px; border-radius: 15px; background: ${bg}; color: ${color}; line-height: 1.4;">
+                        ${text}
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+            container.scrollTop = container.scrollHeight; // Auto-scroll
+            return id;
         }
     </script>
 </body>
