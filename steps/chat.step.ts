@@ -8,6 +8,7 @@ export const config: ApiRouteConfig = {
   type: 'api',
   path: '/chat',
   method: 'POST',
+  emits: [],
 };
 
 // Global cache to prevent reloading model on every request
