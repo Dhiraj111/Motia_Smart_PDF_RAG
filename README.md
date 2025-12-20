@@ -38,3 +38,46 @@ This project demonstrates the power of **Motia's Polyglot Architecture**, seamle
 ├── uploads/              # Local storage for PDF files
 ├── .env                  # API Keys
 └── package.json
+
+## 🏃‍♂️ Getting Started
+
+### 1. Clone & Install
+```bash
+git clone [https://github.com/yourusername/motia-smart-pdf.git](https://github.com/yourusername/motia-smart-pdf.git)
+cd motia-smart-pdf
+
+# Install Node dependencies
+npm install
+
+# Install Python dependencies
+pip3 install -r requirements.txt
+
+## 2. Configure Environment
+
+Create a `.env` file in the root directory:
+
+```env
+# Vector Database
+PINECONE_API_KEY=your_pinecone_key
+PINECONE_INDEX=motia-rag
+
+# LLM (Brain)
+GROQ_API_KEY=gsk_your_groq_key
+
+# Optional (for Python Mac optimizations)
+TQDM_DISABLE=1
+TOKENIZERS_PARALLELISM=false
+
+## 3. Run Development Server
+
+Motia runs both the TypeScript server and Python worker simultaneously.
+
+```bash
+npm run dev
+
+## 4. Use the App
+
+Open http://localhost:3000/app
+Upload a PDF.
+Watch the terminal to see the Python Worker index the file.
+Ask a question!
