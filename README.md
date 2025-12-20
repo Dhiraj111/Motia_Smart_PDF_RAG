@@ -2,28 +2,35 @@
 
 A full-stack AI application that allows users to upload PDF documents and chat with them in real-time. 
 
-This project demonstrates the power of **Motia's Polyglot Architecture**, seamlessly blending **TypeScript** (for API/Frontend) and **Python** (for AI/Embeddings) into a single, cohesive workflow.
+An intelligent, AI-powered document assistant that lets you chat with your PDF files. Built with **React**, **Motia**, **Pinecone**, and **Groq (Llama 3)**.
 
 ![Motia RAG Architecture]
 
 ## 🚀 Features
 
-- **📄 PDF Ingestion:** Uploads are streamed, chunked, and saved locally.
-- **🧠 Local Embeddings:** Uses `HuggingFace (all-MiniLM-L6-v2)` running locally in Python to generate free vector embeddings.
-- **⚡ Instant Chat:** Uses **Groq (Llama 3)** for near-instant, zero-cost AI responses.
-- **🔍 Semantic Search:** Stores and retrieves vectors using **Pinecone**.
-- **🔗 Event-Driven:** Decoupled architecture using Motia events (`file.uploaded`).
+* **📄 Drag & Drop Upload:** seamless PDF uploading with automatic 1MB chunking for stability.
+* **🧠 RAG Architecture:** Retrieval-Augmented Generation to answer questions strictly based on your document's content.
+* **⚡ Real-Time Polling:** Smart UI that waits for backend indexing before allowing user interaction.
+* **🌊 Streaming Responses:** Simulated "typewriter" effect for a polished, ChatGPT-like experience.
+* **💎 Markdown Support:** Rich text rendering (Bullet points, **Bold**, Code blocks) in AI answers.
+* **🔮 One-Click Summarization:** Instantly generate an Executive Summary, Key Points, and Action Items.
+* **💾 Persistent Chat:** Your conversation and file session are saved automatically to `localStorage` (survives page refreshes).
 
 ## 🛠️ Tech Stack
 
-| Component | Technology | Role |
-|-----------|------------|------|
-| **Orchestration** | [Motia](https://motia.dev) | Connecting Steps & Events |
-| **Backend API** | TypeScript (Node.js) | REST API & Upload Handling |
-| **AI Worker** | Python 3.9+ | PDF Parsing & Embedding |
-| **LLM** | Groq (Llama 3) | Generative AI Answers |
-| **Vector DB** | Pinecone | Storing Knowledge |
-| **Embeddings** | HuggingFace | Vectorizing Text (Local) |
+### **Frontend**
+* **Framework:** React + Vite (TypeScript)
+* **Styling:** Tailwind CSS (v3)
+* **Icons:** Lucide React
+* **State Management:** React Hooks + LocalStorage
+* **Markdown:** `react-markdown`
+
+### **Backend**
+* **Runtime:** Node.js
+* **Framework:** [Motia](https://motia.dev) (Workflow & API Engine)
+* **Vector Database:** Pinecone
+* **LLM:** Groq (Llama-3.3-70b-versatile)
+* **PDF Parsing:** `pdf-parse`
 
 ## 📂 Project Structure
 
@@ -42,49 +49,55 @@ This project demonstrates the power of **Motia's Polyglot Architecture**, seamle
 
 ## 🏃‍♂️ Getting Started
 
-### 1. Clone & Install
-```bash
-git clone [https://github.com/yourusername/motia-smart-pdf.git](https://github.com/yourusername/motia-smart-pdf.git)
-cd motia-smart-pdf
+## 🚀 Getting Started
 
-# Install Node dependencies
-npm install
+### 1. Prerequisites
+* Node.js (v18 or higher)
+* Pinecone API Key (Index dimension: **384**)
+* Groq API Key
 
-# Install Python dependencies
-pip3 install -r requirements.txt
-```
+### 2. Backend Setup (Root Folder)
+1.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+2.  **Configure Environment:**
+    Create a `.env` file in the root directory:
+    ```env
+    PINECONE_API_KEY=your_pinecone_key
+    PINECONE_INDEX=your_index_name
+    GROQ_API_KEY=your_groq_key
+    ```
+3.  **Start the Backend Server:**
+    ```bash
+    npm run dev
+    ```
+    *Server runs on `http://localhost:3000`*
 
-## 2. Configure Environment
+### 3. Frontend Setup (Client Folder)
+1.  **Navigate to client folder:**
+    ```bash
+    cd client
+    ```
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+3.  **Start the React App:**
+    ```bash
+    npm run dev
+    ```
+    *App runs on `http://localhost:5173`*
 
-Create a `.env` file in the root directory:
+---
 
-```env
-# Vector Database
-PINECONE_API_KEY=your_pinecone_key
-PINECONE_INDEX=motia-rag
+## 📖 Usage Guide
 
-# LLM (Brain)
-GROQ_API_KEY=gsk_your_groq_key
-
-# Optional (for Python Mac optimizations)
-TQDM_DISABLE=1
-TOKENIZERS_PARALLELISM=false
-```
-
-## 3. Run Development Server
-
-Motia runs both the TypeScript server and Python worker simultaneously.
-
-```bash
-npm run dev
-```
-
-## 4. Use the App
-
-Open http://localhost:3000/app
-Upload a PDF.
-Watch the terminal to see the Python Worker index the file.
-Ask a question!
+1.  **Upload:** Drag & drop a PDF. The app will upload it in chunks and index it in Pinecone.
+2.  **Wait:** The status bar will change from "⏳ Uploading" to "✅ Ready" once indexing is complete.
+3.  **Chat:** Type any question about the document.
+4.  **Summarize:** Click the **✨ Summarize** button in the header for an instant structured overview.
+5.  **Reset:** Click the **Trash Icon** (🗑️) to clear history and upload a new file.
 
 ## 🐛 Troubleshooting
 
@@ -97,3 +110,11 @@ Check that your Pinecone Index is 384 dimensions.
 "Socket Hang Up" on Upload?
 
 The frontend uses chunking (10KB chunks) to prevent process overflows. Ensure you are not bypassing the frontend logic.
+
+<br />
+
+<div align="center">
+
+Built with ❤️ for the 2025 Hackathon.
+
+</div>
