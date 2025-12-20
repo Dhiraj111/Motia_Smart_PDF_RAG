@@ -6,38 +6,78 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Motia Smart PDF</title>
     <style>
-        body {
-            font-family: -apple-system, system-ui, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-
-        .container {
+        /* 1. Main Chat Area */
+        #chatContainer {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 25px;
+            /* More breathing room between QA pairs */
+            padding: 40px 20px;
+            max-width: 900px;
+            /* Keep text readable width */
+            margin: 0 auto;
         }
 
-        textarea {
+        /* 2. The Row (Alignment) */
+        .chat-row {
+            display: flex;
             width: 100%;
-            height: 100px;
-            padding: 0.5rem;
         }
 
-        button {
-            padding: 0.5rem 1rem;
-            background: #000;
-            color: #fff;
-            border: none;
-            cursor: pointer;
+        .chat-row.user {
+            justify-content: flex-end;
         }
 
-        .response {
-            background: #f4f4f4;
-            padding: 1rem;
-            border-radius: 4px;
+        .chat-row.assistant {
+            justify-content: flex-start;
+        }
+
+        /* 3. GEMINI STYLE BUBBLES */
+
+        /* USER: Keep a subtle pill shape (like Gemini/ChatGPT) */
+        .chat-bubble.user {
+            background-color: #f0f4f9;
+            /* Very light blue-gray */
+            color: #1f1f1f;
+            padding: 10px 20px;
+            border-radius: 24px;
+            /* Fully rounded pill */
+            max-width: 70%;
+            font-family: 'Google Sans', sans-serif;
+            /* Optional: looks nicer */
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        /* ASSISTANT: NO background, just clean text */
+        .chat-bubble.assistant {
+            background-color: transparent;
+            /* Invisible background */
+            box-shadow: none;
+            /* No shadow */
+            padding: 0;
+            /* No padding needed */
+            color: #000;
+            width: 100%;
+            /* Let text expand nicely */
+            max-width: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            /* Better reading spacing */
             white-space: pre-wrap;
+        }
+
+        /* Add a little icon or label for the AI (Optional polish) */
+        .chat-bubble.assistant::before {
+            content: "✨ AI Answer";
+            display: block;
+            font-size: 12px;
+            font-weight: bold;
+            color: #6e6e6e;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
     </style>
 </head>
@@ -49,14 +89,15 @@
         <div style="background: #f4f4f4; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
             <h3>1. Upload PDF</h3>
             <input type="file" id="fileInput" accept="application/pdf" />
-            <button onclick="uploadFile()" style="padding: 10px 20px; background: #000; color: #fff; border: none; cursor: pointer;">
+            <button onclick="uploadFile()"
+                style="padding: 10px 20px; background: #000; color: #fff; border: none; cursor: pointer;">
                 Upload & Process
             </button>
             <div id="uploadStatus" style="margin-top: 10px; color: #555;"></div>
         </div>
 
         <div style="border: 1px solid #ddd; border-radius: 8px; height: 500px; display: flex; flex-direction: column;">
-            
+
             <div id="chatContainer" style="flex: 1; overflow-y: auto; padding: 20px; background: #fff;">
                 <div style="color: #888; text-align: center; margin-top: 100px;">
                     Upload a PDF to start chatting!
@@ -64,10 +105,10 @@
             </div>
 
             <div style="padding: 20px; background: #f9f9f9; border-top: 1px solid #ddd; display: flex; gap: 10px;">
-                <input type="text" id="questionInput" placeholder="Ask a question about the PDF..." 
+                <input type="text" id="questionInput" placeholder="Ask a question about the PDF..."
                     style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px;"
                     onkeypress="if(event.key === 'Enter') askQuestion()">
-                <button onclick="askQuestion()" 
+                <button onclick="askQuestion()"
                     style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
                     Send
                 </button>
@@ -76,8 +117,9 @@
     </div>
     <script>
         let currentFileId = null;
-        let chatHistory = []; // STORE CONVERSATION HERE
+        let chatHistory = [];
 
+        // --- UPLOAD FUNCTION (Kept same as before) ---
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
@@ -87,15 +129,15 @@
             status.innerText = "Initializing upload...";
 
             const fileId = crypto.randomUUID();
-            currentFileId = fileId; 
-            
-            // RESET CHAT HISTORY
-            chatHistory = []; 
-            document.getElementById('chatContainer').innerHTML = '<div style="color: #28a745; text-align: center; margin: 20px;">✅ New PDF Ready! Ask away.</div>';
+            currentFileId = fileId;
 
-            // ⚡️ PERFORMANCE FIX: Change 10KB to 1MB 
-            const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB per chunk
-            
+            chatHistory = []; // Reset history
+            document.getElementById('chatContainer').innerHTML = `
+            <div style="text-align: center; color: #28a745; margin-top: 20px;">
+                ✅ New PDF Ready! Ask away.
+            </div>`;
+
+            const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
             try {
@@ -109,61 +151,76 @@
                         reader.onload = () => r(reader.result.split(',')[1]);
                     });
 
-                    // Only update UI every 10% to prevent lag
                     if (i % 5 === 0 || i === totalChunks - 1) {
-                         status.innerText = `Uploading chunk ${i + 1} of ${totalChunks}...`;
+                        status.innerText = `Uploading chunk ${i + 1} of ${totalChunks}...`;
                     }
-                    
+
                     await fetch('/upload', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ fileId, fileName: file.name, chunkIndex: i, totalChunks, dataBase64: base64 })
                     });
                 }
-                status.innerText = "✅ Upload Complete! (ID: " + fileId + ")";
+                status.innerText = "✅ Upload Complete!";
             } catch (e) {
                 console.error(e);
                 status.innerText = "❌ Upload failed.";
             }
         }
 
+        // --- NEW CLEAN UI FUNCTION ---
+        function addMessageToUI(role, text) {
+            const container = document.getElementById('chatContainer');
+            const id = 'msg-' + Date.now() + Math.random();
+
+            // Use CSS classes instead of inline styles
+            const rowClass = role === 'user' ? 'user' : 'assistant';
+            const bubbleClass = role === 'user' ? 'user' : 'assistant';
+
+            const html = `
+            <div class="chat-row ${rowClass}">
+                <div id="${id}" class="chat-bubble ${bubbleClass}">
+                    ${text}
+                </div>
+            </div>
+        `;
+
+            container.insertAdjacentHTML('beforeend', html);
+            container.scrollTop = container.scrollHeight;
+            return id;
+        }
+
+        // --- ASK QUESTION (Without Source Text) ---
         async function askQuestion() {
             const input = document.getElementById('questionInput');
             const question = input.value.trim();
             if (!question || !currentFileId) return;
 
-            input.value = ''; // Clear input immediately
+            input.value = '';
 
-            // STEP A: Show YOUR message (Blue/Right)
+            // 1. Show User Message
             addMessageToUI('user', question);
             chatHistory.push({ role: 'user', content: question });
 
-            // STEP B: Show TEMPORARY AI message (Gray/Left)
+            // 2. Show Loading Bubble
             const loadingId = addMessageToUI('assistant', '<i>Thinking...</i>');
 
             try {
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        messages: chatHistory, 
-                        fileId: currentFileId 
+                    body: JSON.stringify({
+                        messages: chatHistory,
+                        fileId: currentFileId
                     })
                 });
                 const data = await res.json();
-                
-                // STEP C: Find the Gray Bubble and update it with the Answer
+
+                // 3. Update the Bubble with ONLY the answer
                 const answerDiv = document.getElementById(loadingId);
-                
                 if (answerDiv) {
                     answerDiv.innerHTML = data.answer;
-                    
-                    // Add Sources if available
-                    if (data.sources && data.sources.length > 0) {
-                        answerDiv.innerHTML += `<div style="margin-top:8px; font-size:0.85em; color:#666; border-left: 2px solid #ccc; padding-left: 8px;">
-                            📝 Source: "${data.sources[0].metadata.text.substring(0, 100)}..."
-                        </div>`;
-                    }
+                    // NOTE: I removed the "Source" appending code here.
                 }
 
                 chatHistory.push({ role: 'assistant', content: data.answer });
@@ -173,30 +230,6 @@
                 const errorDiv = document.getElementById(loadingId);
                 if (errorDiv) errorDiv.innerHTML = "❌ Error getting answer.";
             }
-        }
-
-        function addMessageToUI(role, text) {
-            const container = document.getElementById('chatContainer');
-            const id = 'msg-' + Date.now() + Math.random(); // Unique ID
-            
-            // STYLE LOGIC: 
-            // User = Blue Right
-            // Assistant = Gray Left
-            const isUser = role === 'user';
-            const bg = isUser ? '#007bff' : '#eee';
-            const color = isUser ? '#fff' : '#000';
-            const align = isUser ? 'flex-end' : 'flex-start';
-
-            const html = `
-                <div style="display: flex; justify-content: ${align}; margin-bottom: 10px;">
-                    <div id="${id}" style="max-width: 70%; padding: 10px 15px; border-radius: 15px; background: ${bg}; color: ${color}; line-height: 1.4;">
-                        ${text}
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', html);
-            container.scrollTop = container.scrollHeight; // Auto-scroll
-            return id;
         }
     </script>
 </body>
