@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, FileUp, Loader2, Bot, CheckCircle2, Sparkles } from 'lucide-react'; // Added Sparkles icon
+import { Send, FileUp, Loader2, Bot, CheckCircle2, Sparkles, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 
@@ -36,38 +36,52 @@ const BotMessage = ({ content, isNew }: { content: string, isNew: boolean }) => 
 };
 
 function App() {
-  const [fileId, setFileId] = useState<string | null>(null);
+  // 1. INITIALIZE STATE FROM LOCAL STORAGE
+  const [fileId, setFileId] = useState<string | null>(() => localStorage.getItem("chat_fileId"));
+  const [messages, setMessages] = useState<Message[]>(() => {
+      const saved = localStorage.getItem("chat_messages");
+      return saved ? JSON.parse(saved) : [];
+  });
+
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // 2. SAVE TO LOCAL STORAGE WHENEVER STATE CHANGES
+  useEffect(() => {
+    if (fileId) localStorage.setItem("chat_fileId", fileId);
+    localStorage.setItem("chat_messages", JSON.stringify(messages));
+  }, [fileId, messages]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  // --- 1. NEW SUMMARIZE FUNCTION ---
+  const handleClearChat = () => {
+      if(!confirm("Are you sure you want to clear the chat history?")) return;
+      setMessages([]);
+      setFileId(null);
+      setUploadStatus("");
+      localStorage.removeItem("chat_fileId");
+      localStorage.removeItem("chat_messages");
+  };
+
   const handleSummarize = async () => {
     if (!fileId || isLoading) return;
-
     const summaryPrompt = "Please generate a structured summary of this document. Include:\n1. **Executive Summary** (2-3 sentences)\n2. **Key Points** (Bulleted list)\n3. **Action Items** (If any)";
-    
-    // We don't show the user's "prompt" in the chat history to keep it clean.
-    // We just show the AI's response.
     setIsLoading(true);
-
     try {
       const res = await axios.post('/chat', {
         messages: [...messages, { role: 'user', content: summaryPrompt }],
         fileId
       });
-      
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.answer }]);
     } catch (err) {
       console.error(err);
+      setMessages(prev => [...prev, { role: 'assistant', content: "❌ Error generating summary." }]);
     } finally {
       setIsLoading(false);
     }
@@ -79,7 +93,7 @@ function App() {
 
     setIsUploading(true);
     setUploadStatus("Initializing...");
-    setMessages([]);
+    setMessages([]); // Clears old chat from UI and Storage
 
     try {
       const newFileId = crypto.randomUUID();
@@ -148,22 +162,29 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               📚 Motia PDF Chat
             </h1>
-            {uploadStatus === "✅ Ready!" && (
-                <span className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">
-                    <CheckCircle2 size={14} /> Ready
-                </span>
-            )}
+            
+            <div className="flex items-center gap-2">
+                {uploadStatus === "✅ Ready!" && (
+                    <span className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                        <CheckCircle2 size={14} /> Ready
+                    </span>
+                )}
+                {/* TRASH BUTTON (Clear History) */}
+                {fileId && (
+                    <button onClick={handleClearChat} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition" title="Clear Chat">
+                        <Trash2 size={18} />
+                    </button>
+                )}
+            </div>
           </div>
           
           <div className="mt-6 flex items-center gap-3">
-            {/* UPLOAD BUTTON */}
             <label className={`flex items-center gap-2 px-5 py-2.5 bg-black text-white rounded-lg cursor-pointer hover:bg-gray-800 transition shadow-lg ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
               {isUploading ? <Loader2 size={18} className="animate-spin" /> : <FileUp size={18} />}
               <span className="font-medium">Upload PDF</span>
               <input type="file" className="hidden" onChange={handleUpload} accept=".pdf" disabled={isUploading} />
             </label>
 
-            {/* --- 2. NEW SUMMARIZE BUTTON --- */}
             <button 
                 onClick={handleSummarize}
                 disabled={!fileId || isUploading || isLoading}
