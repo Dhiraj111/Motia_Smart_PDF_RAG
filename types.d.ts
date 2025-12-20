@@ -12,8 +12,10 @@ declare module 'motia' {
   }
 
   interface Handlers {
-    'UploadPDF': ApiRouteHandler<Record<string, unknown>, unknown, never>
+    'UploadPDF': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'file.uploaded'; data: never }>
     'ServeFrontend': ApiRouteHandler<Record<string, unknown>, unknown, never>
+    'ChatPDF': ApiRouteHandler<Record<string, unknown>, unknown, never>
+    'ProcessPDF': EventHandler<never, never>
     'LogGreeting': EventHandler<{ requestId: string; greeting: string; processedBy: string }, never>
     'HelloAPI': ApiRouteHandler<Record<string, unknown>, ApiResponse<200, { message: string; status: string; appName: string }>, { topic: 'process-greeting'; data: { timestamp: string; appName: string; greetingPrefix: string; requestId: string } }>
     'ProcessGreeting': EventHandler<{ timestamp: string; appName: string; greetingPrefix: string; requestId: string }, { topic: 'greeting-processed'; data: { requestId: string; greeting: string; processedBy: string } }>
