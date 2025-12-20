@@ -1,6 +1,6 @@
-import { ApiRouteConfig, Handler } from 'motia';
-import fs from 'fs-extra';
-import path from 'path';
+import { ApiRouteConfig, Handler } from 'motia'; // <--- NO 'emit' HERE
+import * as fs from 'fs';
+import * as path from 'path';
 
 export const config: ApiRouteConfig = {
   name: 'UploadPDF',
@@ -10,55 +10,51 @@ export const config: ApiRouteConfig = {
   emits: ['file.uploaded'],
 };
 
-export const handler: Handler = async (req, { emit, logger }) => {
+// <--- 'emit' MUST BE HERE
+export const handler: Handler = async (req, { logger, emit }) => {
+  const { fileId, fileName, chunkIndex, totalChunks, dataBase64 } = req.body;
+
+  const uploadDir = path.join(process.cwd(), 'uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  const safeFileName = `${fileId}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  const filePath = path.join(uploadDir, safeFileName);
+
   try {
-    const { fileId, fileName, chunkIndex, totalChunks, dataBase64 } = req.body;
-
-    if (!fileId || !dataBase64) {
-      return { status: 400, body: { error: 'Missing data' } };
-    }
-
-    // 1. Define file path
-    const uploadDir = path.join(process.cwd(), 'uploads');
-    await fs.ensureDir(uploadDir);
-    const safeName = `${fileId}-${fileName}`;
-    const filePath = path.join(uploadDir, safeName);
-
-    // 2. Append chunk to file
     const buffer = Buffer.from(dataBase64, 'base64');
-    
-    // If it's the first chunk, ensure we start fresh (overwrite if exists)
-    if (chunkIndex === 0) {
-      await fs.writeFile(filePath, buffer);
-    } else {
-      await fs.appendFile(filePath, buffer);
+
+    if (chunkIndex === 0 && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
     }
+    
+    fs.appendFileSync(filePath, buffer);
+    logger.info(`📝 Chunk ${chunkIndex + 1}/${totalChunks} written.`);
 
-    logger.info(`Received chunk ${chunkIndex + 1}/${totalChunks} for ${fileName}`);
-
-    // 3. Check if upload is complete
     if (chunkIndex === totalChunks - 1) {
-      logger.info('Upload complete. Emitting event.');
+      logger.info('✅ Upload finished! Sending event...');
+
+      const eventPayload = {
+        filePath: filePath,
+        fileId: fileId
+      };
       
-      // Emit event for Python to pick up
+      // DEBUG LOG: If this number is big, the code is wrong.
+      logger.info(`🔍 DEBUG: Payload Size = ${JSON.stringify(eventPayload).length} chars`);
+
       await emit({
         topic: 'file.uploaded',
-        data: { filePath, fileName, fileId },
+        data: eventPayload // <--- TINY PAYLOAD ONLY
       });
-
-      return { 
-        status: 200, 
-        body: { message: 'Upload complete', complete: true, fileId } 
-      };
+      
+      return { status: 200, body: { message: 'Upload complete', filePath } };
     }
 
-    return { 
-      status: 200, 
-      body: { message: 'Chunk received', complete: false } 
-    };
+    return { status: 200, body: { message: 'Chunk received' } };
 
   } catch (error: any) {
-    logger.error('Upload failed', { error: error.message });
-    return { status: 500, body: { error: 'Internal Server Error' } };
+    logger.error(`❌ Upload Failed: ${error.message}`);
+    return { status: 500, body: { error: error.message } };
   }
 };

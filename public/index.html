@@ -89,11 +89,13 @@
             const fileId = crypto.randomUUID();
             currentFileId = fileId; 
             
-            // RESET CHAT HISTORY ON NEW UPLOAD
+            // RESET CHAT HISTORY
             chatHistory = []; 
             document.getElementById('chatContainer').innerHTML = '<div style="color: #28a745; text-align: center; margin: 20px;">✅ New PDF Ready! Ask away.</div>';
 
-            const CHUNK_SIZE = 10 * 1024; 
+            // ⚡️ PERFORMANCE FIX: Change 10KB to 1MB 
+            const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB per chunk
+            
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
             try {
@@ -107,7 +109,11 @@
                         reader.onload = () => r(reader.result.split(',')[1]);
                     });
 
-                    status.innerText = `Uploading chunk ${i + 1} of ${totalChunks}...`;
+                    // Only update UI every 10% to prevent lag
+                    if (i % 5 === 0 || i === totalChunks - 1) {
+                         status.innerText = `Uploading chunk ${i + 1} of ${totalChunks}...`;
+                    }
+                    
                     await fetch('/upload', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
