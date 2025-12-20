@@ -14,62 +14,57 @@ export const config: ApiRouteConfig = {
 let extractor: any = null;
 
 export const handler: Handler = async (req, { logger }) => {
-  // EXPECT 'messages' ARRAY NOW
   const { messages, fileId } = req.body;
   
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return { status: 400, body: { error: 'Messages array required' } };
   }
 
-  // 1. Get the LATEST question for Vector Search
   const lastMessage = messages[messages.length - 1];
   const question = lastMessage.content;
-
-  logger.info(`📝 New Question: "${question}" (History Length: ${messages.length})`);
 
   try {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY! });
-    const indexName = process.env.PINECONE_INDEX!;
-    const index = pc.index(indexName);
+    const index = pc.index(process.env.PINECONE_INDEX!);
 
     if (!extractor) {
-      logger.info('⬇️ Loading embedding model...');
       extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     }
 
-    // 2. Generate Vector for the LAST question only
+    // 1. Search for Context
     const output = await extractor(question, { pooling: 'mean', normalize: true });
     const queryVector = Array.from(output.data);
 
-    // 3. Search Pinecone (Scoped to File)
     const filter = fileId ? { file_id: fileId } : undefined;
     const queryResponse = await index.query({
       vector: queryVector as number[],
-      topK: 3,
+      topK: 5, // Increase to 5 for better context coverage
       includeMetadata: true,
       filter: filter,
     });
 
     const contextText = queryResponse.matches?.map((m: any) => m.metadata?.text).join('\n---\n') || '';
 
-    // 4. Construct Full Conversation for Groq
-    // SYSTEM PROMPT + HISTORY + NEW CONTEXT
+    // 2. NEW INTELLIGENT SYSTEM PROMPT
+    const systemPrompt = `
+    You are an intelligent AI assistant capable of analyzing PDF documents.
+    
+    HERE IS THE CONTEXT FROM THE UPLOADED PDF:
+    ${contextText}
+
+    INSTRUCTIONS:
+    1. If the user asks a question about facts in the PDF, answer STRICTLY using the context above.
+    2. If the user asks for a definition, grammar check, summary, or to "reframe" a sentence, USE YOUR GENERAL KNOWLEDGE to help them, while keeping the PDF context in mind.
+    3. If the user says "okay", "thanks", or "hello", be polite and conversational.
+    4. Do NOT say "I don't see that in the document" unless the question is a specific factual query about the PDF that is truly missing.
+    `;
+
     const finalMessages = [
-      { 
-        role: 'system', 
-        content: `You are a helpful AI assistant. Use the following context to answer the user's question. 
-        
-        CONTEXT:
-        ${contextText}
-        
-        If the answer is not in the context, say "I don't see that in the document."` 
-      },
-      ...messages // Spread the full history here
+      { role: 'system', content: systemPrompt },
+      ...messages
     ];
 
-    logger.info('🤖 Asking Groq with History...');
-    
     const completion = await groq.chat.completions.create({
       messages: finalMessages as any,
       model: 'llama-3.3-70b-versatile',
