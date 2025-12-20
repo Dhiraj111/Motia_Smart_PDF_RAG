@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motia Smart PDF</title>
+    <style>
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 0.5rem;
+        }
+
+        button {
+            padding: 0.5rem 1rem;
+            background: #000;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+
+        .response {
+            background: #f4f4f4;
+            padding: 1rem;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>📚 Motia PDF RAG</h1>
+
+    <div class="container">
+        <div style="border-bottom: 1px solid #eee; padding-bottom: 2rem;">
+            <h3>1. Upload PDF</h3>
+            <input type="file" id="fileInput" accept=".pdf">
+            <button onclick="uploadFile()">Upload & Process</button>
+            <p id="uploadStatus"></p>
+        </div>
+
+        <div>
+            <h3>2. Ask Question</h3>
+            <textarea id="questionInput" placeholder="What is this document about?"></textarea>
+            <button onclick="askQuestion()">Ask</button>
+            <div id="answerArea" class="response" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) return alert("Please select a file");
+
+            const status = document.getElementById('uploadStatus');
+            status.innerText = "Initializing upload...";
+
+            // Generate a unique ID for this upload session
+            const fileId = crypto.randomUUID();
+            const CHUNK_SIZE = 10 * 1024; // 1MB chunks
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+            try {
+                for (let i = 0; i < totalChunks; i++) {
+                    // 1. Slice the file
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(file.size, start + CHUNK_SIZE);
+                    const chunk = file.slice(start, end);
+
+                    // 2. Convert chunk to Base64
+                    const base64 = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.readAsDataURL(chunk);
+                        reader.onload = () => resolve(reader.result.split(',')[1]);
+                    });
+
+                    // 3. Send chunk
+                    status.innerText = `Uploading chunk ${i + 1} of ${totalChunks}...`;
+
+                    const res = await fetch('/upload', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            fileId,
+                            fileName: file.name,
+                            chunkIndex: i,
+                            totalChunks,
+                            dataBase64: base64
+                        })
+                    });
+
+                    if (!res.ok) throw new Error("Chunk upload failed");
+                }
+
+                status.innerText = "✅ Upload Complete! Processing...";
+
+            } catch (e) {
+                console.error(e);
+                status.innerText = "❌ Network error or upload failed.";
+            }
+        }
+
+        async function askQuestion() {
+            const question = document.getElementById('questionInput').value;
+            const answerArea = document.getElementById('answerArea');
+            answerArea.style.display = 'block';
+            answerArea.innerText = "Thinking...";
+
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                const data = await res.json();
+                answerArea.innerText = data.answer;
+            } catch (e) {
+                answerArea.innerText = "Error getting answer.";
+            }
+        }
+    </script>
+</body>
+
+</html>
