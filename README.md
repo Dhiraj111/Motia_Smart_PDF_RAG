@@ -38,6 +38,7 @@ This project demonstrates the power of **Motia's Polyglot Architecture**, seamle
 ├── uploads/              # Local storage for PDF files
 ├── .env                  # API Keys
 └── package.json
+```
 
 ## 🏃‍♂️ Getting Started
 
@@ -51,6 +52,7 @@ npm install
 
 # Install Python dependencies
 pip3 install -r requirements.txt
+```
 
 ## 2. Configure Environment
 
@@ -67,6 +69,7 @@ GROQ_API_KEY=gsk_your_groq_key
 # Optional (for Python Mac optimizations)
 TQDM_DISABLE=1
 TOKENIZERS_PARALLELISM=false
+```
 
 ## 3. Run Development Server
 
@@ -74,6 +77,7 @@ Motia runs both the TypeScript server and Python worker simultaneously.
 
 ```bash
 npm run dev
+```
 
 ## 4. Use the App
 
@@ -81,3 +85,15 @@ Open http://localhost:3000/app
 Upload a PDF.
 Watch the terminal to see the Python Worker index the file.
 Ask a question!
+
+## 🐛 Troubleshooting
+
+Python Worker Crashes?
+
+Ensure you have installed pip install python-dotenv langchain-huggingface.
+
+Check that your Pinecone Index is 384 dimensions.
+
+"Socket Hang Up" on Upload?
+
+The frontend uses chunking (10KB chunks) to prevent process overflows. Ensure you are not bypassing the frontend logic.
