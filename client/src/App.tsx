@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, FileUp, Loader2, Bot, CheckCircle2 } from 'lucide-react';
+import { Send, FileUp, Loader2, Bot, CheckCircle2, Sparkles } from 'lucide-react'; // Added Sparkles icon
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 
@@ -8,20 +8,18 @@ interface Message {
   content: string;
 }
 
-// --- NEW COMPONENT: Handles Typewriter + Markdown ---
 const BotMessage = ({ content, isNew }: { content: string, isNew: boolean }) => {
   const [displayedContent, setDisplayedContent] = useState(isNew ? "" : content);
   const hasStarted = useRef(false);
 
   useEffect(() => {
     if (!isNew || hasStarted.current) {
-        setDisplayedContent(content); // Show instantly if not new
+        setDisplayedContent(content); 
         return;
     }
-
     hasStarted.current = true;
     let i = 0;
-    const speed = 15; // Speed in ms (lower is faster)
+    const speed = 10; 
 
     const timer = setInterval(() => {
       if (i < content.length) {
@@ -31,15 +29,10 @@ const BotMessage = ({ content, isNew }: { content: string, isNew: boolean }) => 
         clearInterval(timer);
       }
     }, speed);
-
     return () => clearInterval(timer);
   }, [content, isNew]);
 
-  return (
-    <div className="prose">
-        <ReactMarkdown>{displayedContent}</ReactMarkdown>
-    </div>
-  );
+  return <div className="prose"><ReactMarkdown>{displayedContent}</ReactMarkdown></div>;
 };
 
 function App() {
@@ -52,24 +45,47 @@ function App() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom whenever messages (or typing) updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
+
+  // --- 1. NEW SUMMARIZE FUNCTION ---
+  const handleSummarize = async () => {
+    if (!fileId || isLoading) return;
+
+    const summaryPrompt = "Please generate a structured summary of this document. Include:\n1. **Executive Summary** (2-3 sentences)\n2. **Key Points** (Bulleted list)\n3. **Action Items** (If any)";
+    
+    // We don't show the user's "prompt" in the chat history to keep it clean.
+    // We just show the AI's response.
+    setIsLoading(true);
+
+    try {
+      const res = await axios.post('/chat', {
+        messages: [...messages, { role: 'user', content: summaryPrompt }],
+        fileId
+      });
+      
+      setMessages(prev => [...prev, { role: 'assistant', content: res.data.answer }]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
-    setUploadStatus("Initializing upload...");
+    setUploadStatus("Initializing...");
     setMessages([]);
 
     try {
       const newFileId = crypto.randomUUID();
       setFileId(newFileId);
 
-      const CHUNK_SIZE = 1 * 1024 * 1024;
+      const CHUNK_SIZE = 1 * 1024 * 1024; 
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
       for (let i = 0; i < totalChunks; i++) {
@@ -82,11 +98,11 @@ function App() {
             reader.onload = () => resolve((reader.result as string).split(',')[1]);
         });
 
-        setUploadStatus(`Uploading chunk ${i + 1} of ${totalChunks}...`);
+        setUploadStatus(`Uploading ${i + 1}/${totalChunks}...`);
         await axios.post('/upload', { fileId: newFileId, fileName: file.name, chunkIndex: i, totalChunks, dataBase64: base64 });
       }
 
-      setUploadStatus("⏳ Waiting for AI indexing...");
+      setUploadStatus("⏳ Indexing...");
       
       const pollInterval = setInterval(async () => {
         try {
@@ -95,40 +111,31 @@ function App() {
                 clearInterval(pollInterval);
                 setUploadStatus("✅ Ready!");
                 setIsUploading(false);
-                // Add initial greeting
-                setMessages([{ role: 'assistant', content: "I've read your PDF! **Ask me anything.**" }]);
+                setMessages([{ role: 'assistant', content: "I've read your PDF! **Ask me anything** or click **Summarize**." }]);
             }
         } catch (err) { console.error(err); }
       }, 2000);
 
     } catch (err) {
       console.error(err);
-      setUploadStatus("❌ Upload failed.");
+      setUploadStatus("❌ Failed");
       setIsUploading(false);
     }
   };
 
   const sendMessage = async () => {
     if (!input.trim() || !fileId) return;
-
     const userMsg = input;
     setInput("");
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsLoading(true);
-
     try {
       const res = await axios.post('/chat', {
         messages: [...messages, { role: 'user', content: userMsg }],
         fileId
       });
-      
-      // Add the AI response
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.answer }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "❌ Error connecting to server." }]);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (err) { console.error(err); } finally { setIsLoading(false); }
   };
 
   return (
@@ -147,13 +154,28 @@ function App() {
                 </span>
             )}
           </div>
-          <div className="mt-6 flex items-center gap-4">
-            <label className={`flex items-center gap-2 px-5 py-2.5 bg-black text-white rounded-lg cursor-pointer hover:bg-gray-800 transition shadow-lg hover:shadow-xl ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+          
+          <div className="mt-6 flex items-center gap-3">
+            {/* UPLOAD BUTTON */}
+            <label className={`flex items-center gap-2 px-5 py-2.5 bg-black text-white rounded-lg cursor-pointer hover:bg-gray-800 transition shadow-lg ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
               {isUploading ? <Loader2 size={18} className="animate-spin" /> : <FileUp size={18} />}
               <span className="font-medium">Upload PDF</span>
               <input type="file" className="hidden" onChange={handleUpload} accept=".pdf" disabled={isUploading} />
             </label>
-            <span className="text-sm text-gray-500 font-medium animate-pulse">{isUploading ? uploadStatus : ""}</span>
+
+            {/* --- 2. NEW SUMMARIZE BUTTON --- */}
+            <button 
+                onClick={handleSummarize}
+                disabled={!fileId || isUploading || isLoading}
+                className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                <Sparkles size={18} />
+                <span className="font-medium">Summarize</span>
+            </button>
+
+            <span className="text-sm text-gray-500 font-medium animate-pulse ml-2">
+                {isUploading ? uploadStatus : ""}
+            </span>
           </div>
         </div>
 
@@ -164,31 +186,24 @@ function App() {
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                     <Bot size={32} className="opacity-40" />
                   </div>
-                  <p>Upload a PDF document to start the conversation.</p>
+                  <p>Upload a PDF to start.</p>
               </div>
           )}
           
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] px-5 py-3.5 shadow-sm ${
+              <div className={`max-w-[85%] px-6 py-4 shadow-sm ${
                 msg.role === 'user' 
                   ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm' 
                   : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-tl-sm'
               }`}>
                  {msg.role === 'user' ? (
-                     <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                     <p className="text-[15px]">{msg.content}</p>
                  ) : (
-                     /* Use BotMessage for AI to get Typewriter + Markdown */
-                     <BotMessage 
-                        content={msg.content} 
-                        isNew={i === messages.length - 1} // Only type the LAST message
-                     />
+                     <BotMessage content={msg.content} isNew={i === messages.length - 1} />
                  )}
-                 
                  {msg.role === 'assistant' && (
-                     <div className="mt-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                         ✨ AI Answer
-                     </div>
+                     <div className="mt-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">✨ AI Answer</div>
                  )}
               </div>
             </div>
@@ -213,14 +228,10 @@ function App() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
             disabled={!fileId || isUploading || isLoading}
-            placeholder={!fileId ? "Waiting for PDF upload..." : "Ask a question..."}
-            className="flex-1 px-5 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition disabled:bg-gray-50 disabled:text-gray-400"
+            placeholder="Ask a question..."
+            className="flex-1 px-5 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition disabled:bg-gray-50"
           />
-          <button 
-            onClick={sendMessage}
-            disabled={!fileId || isUploading || isLoading}
-            className="p-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-md hover:shadow-lg"
-          >
+          <button onClick={sendMessage} disabled={!fileId || isUploading || isLoading} className="p-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition">
             <Send size={20} />
           </button>
         </div>
