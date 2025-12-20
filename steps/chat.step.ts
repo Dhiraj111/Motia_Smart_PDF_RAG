@@ -70,7 +70,7 @@ export const handler: Handler = async (req, { logger }) => {
         { role: 'system', content: `Context:\n${contextText}` },
         { role: 'user', content: question },
       ],
-      model: 'llama3-8b-8192',
+      model: 'llama-3.3-70b-versatile',
     });
 
     const answer = completion.choices[0]?.message?.content || "No answer generated.";
