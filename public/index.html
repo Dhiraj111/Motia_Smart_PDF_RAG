@@ -62,6 +62,9 @@
     </div>
 
     <script>
+        // GLOBAL VARIABLE TO STORE CURRENT FILE ID
+        let currentFileId = null; 
+
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
@@ -70,33 +73,31 @@
             const status = document.getElementById('uploadStatus');
             status.innerText = "Initializing upload...";
 
-            // Generate a unique ID for this upload session
+            // Generate ID here so frontend knows it immediately
             const fileId = crypto.randomUUID();
-            const CHUNK_SIZE = 10 * 1024; // 1MB chunks
+            currentFileId = fileId; // SAVE IT!
+
+            const CHUNK_SIZE = 10 * 1024; // 10KB
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
             try {
                 for (let i = 0; i < totalChunks; i++) {
-                    // 1. Slice the file
                     const start = i * CHUNK_SIZE;
                     const end = Math.min(file.size, start + CHUNK_SIZE);
                     const chunk = file.slice(start, end);
-
-                    // 2. Convert chunk to Base64
                     const base64 = await new Promise((resolve) => {
                         const reader = new FileReader();
                         reader.readAsDataURL(chunk);
                         reader.onload = () => resolve(reader.result.split(',')[1]);
                     });
 
-                    // 3. Send chunk
                     status.innerText = `Uploading chunk ${i + 1} of ${totalChunks}...`;
-
+                    
                     const res = await fetch('/upload', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            fileId,
+                            fileId, // Send our generated ID
                             fileName: file.name,
                             chunkIndex: i,
                             totalChunks,
@@ -107,8 +108,8 @@
                     if (!res.ok) throw new Error("Chunk upload failed");
                 }
 
-                status.innerText = "✅ Upload Complete! Processing...";
-
+                status.innerText = "✅ Upload Complete! Processing... (File ID: " + fileId + ")";
+                
             } catch (e) {
                 console.error(e);
                 status.innerText = "❌ Network error or upload failed.";
@@ -118,19 +119,39 @@
         async function askQuestion() {
             const question = document.getElementById('questionInput').value;
             const answerArea = document.getElementById('answerArea');
+            
+            // VALIDATION: Ensure a file is uploaded first
+            if (!currentFileId) {
+                alert("Please upload a PDF first!");
+                return;
+            }
+
             answerArea.style.display = 'block';
-            answerArea.innerText = "Thinking...";
+            answerArea.innerHTML = "<i>Thinking...</i>";
 
             try {
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question })
+                    body: JSON.stringify({ 
+                        question, 
+                        fileId: currentFileId // <--- SEND THE ID
+                    })
                 });
                 const data = await res.json();
-                answerArea.innerText = data.answer;
+                
+                let html = `<strong>🤖 Answer:</strong><br>${data.answer}<br><br>`;
+                
+                if (data.sources && data.sources.length > 0) {
+                    html += `<div style="background:#eef; padding:10px; font-size:0.9em; border-left:3px solid #55a;">
+                        <strong>📚 Source Context Used:</strong><br>
+                        "<em>${data.sources[0].metadata.text.substring(0, 200)}...</em>"
+                    </div>`;
+                }
+                
+                answerArea.innerHTML = html;
             } catch (e) {
-                answerArea.innerText = "Error getting answer.";
+                answerArea.innerText = "❌ Error getting answer.";
             }
         }
     </script>
