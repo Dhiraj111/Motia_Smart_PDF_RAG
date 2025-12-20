@@ -108,7 +108,7 @@
                 <input type="text" id="questionInput" placeholder="Ask a question about the PDF..."
                     style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px;"
                     onkeypress="if(event.key === 'Enter') askQuestion()">
-                <button onclick="askQuestion()"
+                <button id="sendBtn" onclick="askQuestion()"
                     style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
                     Send
                 </button>
@@ -126,21 +126,29 @@
             if (!file) return alert("Please select a file");
 
             const status = document.getElementById('uploadStatus');
+            const qInput = document.getElementById('questionInput');
+            const sBtn = document.getElementById('sendBtn');
+
+            // 1. DISABLE CHAT IMMEDIATELY
+            qInput.disabled = true;
+            sBtn.disabled = true;
+            qInput.placeholder = "Wait for AI processing...";
+            qInput.style.backgroundColor = "#e9ecef"; // Gray out
+            sBtn.style.opacity = "0.6";
+
             status.innerText = "Initializing upload...";
 
             const fileId = crypto.randomUUID();
             currentFileId = fileId;
 
-            chatHistory = []; // Reset history
-            document.getElementById('chatContainer').innerHTML = `
-            <div style="text-align: center; color: #28a745; margin-top: 20px;">
-                ✅ New PDF Ready! Ask away.
-            </div>`;
+            chatHistory = [];
+            document.getElementById('chatContainer').innerHTML = ''; // Clear chat
 
-            const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB
+            const CHUNK_SIZE = 1 * 1024 * 1024;
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
             try {
+                // --- UPLOAD LOOP ---
                 for (let i = 0; i < totalChunks; i++) {
                     const start = i * CHUNK_SIZE;
                     const end = Math.min(file.size, start + CHUNK_SIZE);
@@ -161,10 +169,47 @@
                         body: JSON.stringify({ fileId, fileName: file.name, chunkIndex: i, totalChunks, dataBase64: base64 })
                     });
                 }
-                status.innerText = "✅ Upload Complete!";
+
+                status.innerText = "⏳ Uploaded! Waiting for AI Indexing...";
+
+                // --- POLLING LOOP (Wait for Python) ---
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const res = await fetch('/status', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ fileId })
+                        });
+                        const data = await res.json();
+
+                        if (data.ready) {
+                            clearInterval(pollInterval);
+
+                            status.innerText = "✅ AI Processing Complete!";
+                            document.getElementById('chatContainer').innerHTML = `
+                            <div style="text-align: center; color: #28a745; margin-top: 20px; font-family: sans-serif;">
+                                ✅ <b>New PDF Ready!</b> Ask away.
+                            </div>`;
+
+                            // 2. ENABLE CHAT WHEN READY
+                            qInput.disabled = false;
+                            sBtn.disabled = false;
+                            qInput.placeholder = "Ask a question about the PDF...";
+                            qInput.style.backgroundColor = "#fff"; // White again
+                            sBtn.style.opacity = "1";
+                            qInput.focus(); // Auto-focus for better UX
+                        }
+                    } catch (e) {
+                        console.error("Polling error", e);
+                    }
+                }, 2000);
+
             } catch (e) {
                 console.error(e);
                 status.innerText = "❌ Upload failed.";
+                // Re-enable in case of error so they can try again
+                qInput.disabled = false;
+                sBtn.disabled = false;
             }
         }
 
