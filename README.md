@@ -1,118 +1,164 @@
-# 📚 Motia Smart PDF Assistant (Advanced RAG)
+# 🤖 Smart PDF Assistant (with Salesforce Automation)
 
-A full-stack AI application that allows users to upload PDF documents and chat with them in real-time. 
+An intelligent, full-stack AI agent that doesn't just read PDFs—it acts on them.
 
-An intelligent, AI-powered document assistant that lets you chat with your PDF files. Built with **React**, **Motia**, **Pinecone**, and **Groq (Llama 3)**.
+This project demonstrates an **Agentic Workflow** where users can upload a resume, chat with it using RAG (Retrieval-Augmented Generation), and automatically extract structured data to create Leads in Salesforce CRM without a single click.
 
-![Motia RAG Architecture]
+## ✨ Features
 
-## 🚀 Features
-
-* **📄 Drag & Drop Upload:** seamless PDF uploading with automatic 1MB chunking for stability.
-* **🧠 RAG Architecture:** Retrieval-Augmented Generation to answer questions strictly based on your document's content.
-* **⚡ Real-Time Polling:** Smart UI that waits for backend indexing before allowing user interaction.
-* **🌊 Streaming Responses:** Simulated "typewriter" effect for a polished, ChatGPT-like experience.
-* **💎 Markdown Support:** Rich text rendering (Bullet points, **Bold**, Code blocks) in AI answers.
-* **🔮 One-Click Summarization:** Instantly generate an Executive Summary, Key Points, and Action Items.
-* **💾 Persistent Chat:** Your conversation and file session are saved automatically to `localStorage` (survives page refreshes).
+- **📄 Smart PDF Ingestion:** Handles large PDF uploads via chunking and extracts raw text.
+- **🧠 RAG Chatbot:** Uses **Pinecone** vector database and **Llama 3 (Groq)** to answer questions based *strictly* on the document content.
+- **🔍 Auto-Extraction:** Automatically parses resumes to identify Name, Email, Company, and Summary using AI.
+- **☁️ Salesforce Integration:**
+  - **Zero-Click Automation:** Detects valid emails and auto-creates a **Lead** in Salesforce.
+  - **OAuth 2.0:** Secure authentication using Refresh Tokens.
+- **⚡ High Performance:** Built on **Motia**, enabling fast, serverless-style step execution.
 
 ## 🛠️ Tech Stack
 
-### **Frontend**
-* **Framework:** React + Vite (TypeScript)
-* **Styling:** Tailwind CSS (v3)
-* **Icons:** Lucide React
-* **State Management:** React Hooks + LocalStorage
-* **Markdown:** `react-markdown`
+- **Frontend:** React (Vite), Tailwind CSS
+- **Backend/Framework:** Node.js, [Motia](https://motia.dev) (AI Agent Framework)
+- **AI Models:**
+  - **LLM:** Llama 3.3 70B (via Groq API)
+  - **Embeddings:** Xenova/all-MiniLM-L6-v2 (Local, ONNX-based)
+- **Database:** Pinecone (Vector DB)
+- **Integration:** Salesforce REST API
+- **Tools:** PDF-Parse, Axios, Dotenv
 
-### **Backend**
-* **Runtime:** Node.js
-* **Framework:** [Motia](https://motia.dev) (Workflow & API Engine)
-* **Vector Database:** Pinecone
-* **LLM:** Groq (Llama-3.3-70b-versatile)
-* **PDF Parsing:** `pdf-parse`
+## 🚀 Getting Started
 
-## 📂 Project Structure
+### 1. Prerequisites
+- Node.js (v18+)
+- A Salesforce Developer Account
+- API Keys for Groq and Pinecone
+
+### 2. Installation
+
+Clone the repository and install dependencies:
 
 ```bash
-├── public/
-│   └── index.html        # Simple frontend UI
+git clone <your-repo-url>
+cd smart-pdf-assistant
+npm install
+```
+
+### 3. Environment Setup
+
+Create a .env file in the root directory.
+
+# AI Services
+GROQ_API_KEY=gsk_...
+PINECONE_API_KEY=pcsk_...
+PINECONE_INDEX=your-index-name
+
+# Salesforce Configuration
+SALESFORCE_CLIENT_ID=...
+SALESFORCE_CLIENT_SECRET=...
+SALESFORCE_REFRESH_TOKEN=...
+SALESFORCE_INSTANCE_URL=[https://your-domain.my.salesforce.com](https://your-domain.my.salesforce.com)
+
+## 4. Running the App
+
+Start the backend development server:
+
+```bash
+npm run dev
+```
+
+The server will start on http://localhost:3000 (or the port defined in Motia).
+
+Start the Frontend (in a separate terminal):
+
+```bash
+cd frontend
+npm run dev
+```
+
+## 🔐 How to Authenticate with Salesforce
+
+This project uses the OAuth 2.0 Web Server Flow to get a permanent REFRESH_TOKEN so the backend can log in automatically.
+
+Step 1: Create a Connected App
+Log in to Salesforce Setup.
+
+Go to App Manager -> New Connected App.
+
+Name: "Motia Integration" (or similar).
+
+Contact Email: Your email.
+
+Enable OAuth Settings: Check this box.
+
+Callback URL: https://oauth.pstmn.io/v1/callback (If using Postman) or http://localhost:3000/callback.
+
+Selected OAuth Scopes: Add Manage user data via APIs (api) and Perform requests on your behalf at any time (refresh_token, offline_access).
+
+Save. Note your Consumer Key (Client ID) and Consumer Secret (Client Secret).
+
+Step 2: Get the Authorization Code
+Paste this URL into your browser (replace values with yours):
+
+```bash
+https://<YOUR_INSTANCE>[.my.salesforce.com/services/oauth2/authorize?client_id=](https://.my.salesforce.com/services/oauth2/authorize?client_id=)<YOUR_CLIENT_ID>&redirect_uri=<YOUR_CALLBACK_URL>&response_type=code
+```
+
+Log in and click "Allow". The browser will redirect you to a URL with a code= parameter at the end. Copy this code.
+
+Step 3: Get the Refresh Token
+Use curl or Postman to make a POST request:
+
+POST https://login.salesforce.com/services/oauth2/token
+
+Body (x-www-form-urlencoded):
+
+grant_type: authorization_code
+
+client_id: YOUR_CLIENT_ID
+
+client_secret: YOUR_CLIENT_SECRET
+
+redirect_uri: YOUR_CALLBACK_URL
+
+code: CODE_FROM_STEP_2
+
+The response will contain your refresh_token. Add this to your .env file!
+
+```bash
+├── client/src
+│   └──  App.css     
+│   └──  App.tsx
+│   └──  index.css
+│   └──  main.tsx
+│     
 ├── steps/
-│   ├── upload.step.ts    # API: Receives chunks & emits 'file.uploaded'
-│   ├── chat.step.ts      # API: Search Pinecone & query Groq
-│   ├── ingest_step.py    # WORKER: Listens for events, embeds PDF
-│   └── frontend.step.ts  # API: Serves the HTML UI
+│   ├── upload.step.ts     # API: Receives chunks & emits 'file.uploaded'
+│   ├── chat.step.ts       # API: Search Pinecone & query Groq
+│   ├── ingest_step.py     # WORKER: Listens for events, embeds PDF
+│   └── frontend.step.ts   # API: Serves the HTML UI
+│   └── salesforce.step.ts # Salesforce integration
+│   └── status.step.ts     # Polling operation for status check
+│ 
 ├── uploads/              # Local storage for PDF files
 ├── .env                  # API Keys
 └── package.json
 ```
 
-## 🏃‍♂️ Getting Started
+## 🔗 How It Works (The Agentic Flow)
 
-### 1. Prerequisites
-* Node.js (v18 or higher)
-* Pinecone API Key (Index dimension: **384**)
-* Groq API Key
+Upload: User uploads a PDF via the React UI.
 
-### 2. Backend Setup (Root Folder)
-1.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-2.  **Configure Environment:**
-    Create a `.env` file in the root directory:
-    ```env
-    PINECONE_API_KEY=your_pinecone_key
-    PINECONE_INDEX=your_index_name
-    GROQ_API_KEY=your_groq_key
-    ```
-3.  **Start the Backend Server:**
-    ```bash
-    npm run dev
-    ```
-    *Server runs on `http://localhost:3000`*
+Vectorization: The backend chunks the text, creates embeddings locally, and stores them in Pinecone.
 
-### 3. Frontend Setup (Client Folder)
-1.  **Navigate to client folder:**
-    ```bash
-    cd client
-    ```
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-3.  **Start the React App:**
-    ```bash
-    npm run dev
-    ```
-    *App runs on `http://localhost:5173`*
+Extraction (Agent): Llama 3 analyzes the text simultaneously to extract structured JSON (Name, Email, Summary).
 
----
+Action: If a valid email is found, the system triggers the salesforce.step.ts logic.
 
-## 📖 Usage Guide
+Result: A new Lead appears in Salesforce instantly.
 
-1.  **Upload:** Drag & drop a PDF. The app will upload it in chunks and index it in Pinecone.
-2.  **Wait:** The status bar will change from "⏳ Uploading" to "✅ Ready" once indexing is complete.
-3.  **Chat:** Type any question about the document.
-4.  **Summarize:** Click the **✨ Summarize** button in the header for an instant structured overview.
-5.  **Reset:** Click the **Trash Icon** (🗑️) to clear history and upload a new file.
+Chat: The user can then ask "What is this candidate's experience?" and get cited answers.
 
-## 🐛 Troubleshooting
+## 🛡️ Troubleshooting
 
-Python Worker Crashes?
+"pdf is not a function": We use a custom import fix in upload.step.ts to handle ESM/CommonJS compatibility for pdf-parse.
 
-Ensure you have installed pip install python-dotenv langchain-huggingface.
-
-Check that your Pinecone Index is 384 dimensions.
-
-"Socket Hang Up" on Upload?
-
-The frontend uses chunking (10KB chunks) to prevent process overflows. Ensure you are not bypassing the frontend logic.
-
-<br />
-
-<div align="center">
-
-Built with ❤️ for the 2025 Hackathon.
-
-</div>
+Salesforce Errors: Ensure your SALESFORCE_INSTANCE_URL does not have a trailing slash or quotes in the .env file.
