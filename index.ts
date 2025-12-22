@@ -14,7 +14,8 @@ const app = express();
 
 // Middleware
 app.use(cors({ origin: '*' }));
-app.use(bodyParser.json()); // ✅
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // Helper function to register "Old Style" handlers
 const registerRoute = (stepModule: any) => {
