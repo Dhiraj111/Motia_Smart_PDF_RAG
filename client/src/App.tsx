@@ -3,6 +3,7 @@ import { Send, FileUp, Loader2, Bot, CheckCircle2, Sparkles, Trash2 } from 'luci
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -75,7 +76,7 @@ function App() {
     const summaryPrompt = "Please generate a structured summary of this document. Include:\n1. **Executive Summary** (2-3 sentences)\n2. **Key Points** (Bulleted list)\n3. **Action Items** (If any)";
     setIsLoading(true);
     try {
-      const res = await axios.post('/chat', {
+      const res = await axios.post(`${API_BASE}/chat`, {
         messages: [...messages, { role: 'user', content: summaryPrompt }],
         fileId
       });
@@ -87,8 +88,6 @@ function App() {
       setIsLoading(false);
     }
   };
-
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -157,7 +156,7 @@ function App() {
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsLoading(true);
     try {
-      const res = await axios.post('/chat', {
+      const res = await axios.post(`${API_BASE}/chat`, {
         messages: [...messages, { role: 'user', content: userMsg }],
         fileId
       });
