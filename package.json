@@ -5,7 +5,7 @@
   "scripts": {
     "postinstall": "motia install",
     "dev": "motia dev",
-    "start": "npx ts-node index.ts",
+    "start": "npx ts-node --esm index.ts",
     "generate-types": "motia generate-types",
     "build": "echo 'No build step'",
     "clean": "rm -rf dist node_modules python_modules .motia .mermaid"
