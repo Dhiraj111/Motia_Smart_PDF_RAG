@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { json } from 'body-parser';
+import bodyParser from 'body-parser'; // ✅ This works safely
 
 // Import your steps as modules
 import * as ChatStep from './steps/chat.step.ts';
@@ -14,7 +14,7 @@ const app = express();
 
 // Middleware
 app.use(cors({ origin: '*' }));
-app.use(json());
+app.use(bodyParser.json()); // ✅
 
 // Helper function to register "Old Style" handlers
 const registerRoute = (stepModule: any) => {
