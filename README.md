@@ -1,3 +1,5 @@
+<div align="center">
+
 # 🤖 Smart PDF Assistant (with Salesforce Automation)
 
 **[Live Demo](motia-smart-pdf-dqky7t0z4-dhiraj111s-projects.vercel.app)**
@@ -5,6 +7,8 @@
 An intelligent, full-stack AI agent that doesn't just read PDFs—it acts on them.
 
 This project demonstrates an **Agentic Workflow** where users can upload a resume, chat with it using RAG (Retrieval-Augmented Generation), and automatically extract structured data to create Leads in Salesforce CRM without a single click.
+
+</div>
 
 ## ✨ Features
 
