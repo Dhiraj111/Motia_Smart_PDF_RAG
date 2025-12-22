@@ -2,7 +2,7 @@
 
 # 🤖 Smart PDF Assistant (with Salesforce Automation)
 
-**[Live Demo](https://motia-smart-pdf-dqky7t0z4-dhiraj111s-projects.vercel.app)**
+**[Live Demo](https://motia-smart-pdf-rag.vercel.app)**
 
 An intelligent, full-stack AI agent that doesn't just read PDFs—it acts on them.
 
