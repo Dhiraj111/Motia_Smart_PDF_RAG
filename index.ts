@@ -1,0 +1,66 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { json } from 'body-parser';
+
+// Import your steps as modules
+import * as ChatStep from './steps/chat.step.ts';
+import * as SalesforceStep from './steps/salesforce.step.ts';
+// import * as UploadStep from './steps/upload.step.ts'; // Uncomment when ready
+
+dotenv.config();
+
+const app = express();
+
+// Middleware
+app.use(cors({ origin: '*' }));
+app.use(json());
+
+// Helper function to register "Old Style" handlers
+const registerRoute = (stepModule: any) => {
+  const { config, handler } = stepModule;
+
+  if (!config || !handler) {
+    console.error(`❌ Failed to register a step: Missing config or handler export.`);
+    return;
+  }
+
+  const method = config.method.toLowerCase() as 'get' | 'post';
+  const path = config.path;
+
+  // Mount the route
+  app[method](path, async (req: express.Request, res: express.Response) => {
+    try {
+      // Create a mock context (logger) for the handler
+      const context = { 
+        logger: { 
+          info: console.log, 
+          error: console.error, 
+          warn: console.warn 
+        } 
+      };
+
+      // Run the handler
+      const result = await handler(req, context);
+
+      // Send response
+      res.status(result.status || 200).json(result.body);
+    } catch (error: any) {
+      console.error(`Error in ${path}:`, error);
+      res.status(500).json({ error: error.message || 'Internal Server Error' });
+    }
+  });
+
+  console.log(`✅ Registered Route: ${config.method.toUpperCase()} ${path}`);
+};
+
+// --- REGISTER ROUTES HERE ---
+registerRoute(ChatStep);
+registerRoute(SalesforceStep); 
+// registerRoute(UploadStep);
+
+// Start Server
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`\n🚀 Server running on http://localhost:${port}`);
+});
