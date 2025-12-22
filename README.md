@@ -162,3 +162,11 @@ Chat: The user can then ask "What is this candidate's experience?" and get cited
 "pdf is not a function": We use a custom import fix in upload.step.ts to handle ESM/CommonJS compatibility for pdf-parse.
 
 Salesforce Errors: Ensure your SALESFORCE_INSTANCE_URL does not have a trailing slash or quotes in the .env file.
+
+<br />
+
+<div align="center">
+
+Built with ❤️ for the 2025 Hackathon.
+
+</div>
