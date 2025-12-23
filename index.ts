@@ -19,26 +19,43 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 const registerRoute = (stepModule: any) => {
-    const { config, handler } = stepModule;
-    if (!config || !handler) {
-        console.error(`❌ Failed to register a step: Missing config or handler export.`);
-        return;
-    }
-    const method = config.method.toLowerCase() as 'get' | 'post';
-    const path = config.path;
+  const { config, handler } = stepModule;
 
-    app[method](path, async (req: express.Request, res: express.Response) => {
-        try {
-            const context = { logger: { info: console.log, error: console.error, warn: console.warn } };
-            const result = await handler(req, context);
-            res.status(result.status || 200).json(result.body);
-        } catch (error: any) {
-            console.error(`Error in ${path}:`, error);
-            res.status(500).json({ error: error.message || 'Internal Server Error' });
+  if (!config || !handler) {
+    console.error(`❌ Failed to register a step: Missing config or handler export.`);
+    return;
+  }
+
+  const method = config.method.toLowerCase() as 'get' | 'post';
+  const path = config.path;
+
+  app[method](path, async (req: express.Request, res: express.Response) => {
+    try {
+      // ✅ FIX: Add 'emit' to this context object
+      const context = { 
+        logger: { 
+          info: console.log, 
+          error: console.error, 
+          warn: console.warn 
+        },
+        // The handler needs this function to exist!
+        emit: async (event: any) => {
+           console.log(`📡 Event Emitted: ${event.topic}`, event.data);
         }
-    });
+      };
 
-    console.log(`✅ Registered Route: ${config.method.toUpperCase()} ${path}`);
+      // Run the handler
+      const result = await handler(req, context);
+
+      // Send response
+      res.status(result.status || 200).json(result.body);
+    } catch (error: any) {
+      console.error(`Error in ${path}:`, error);
+      res.status(500).json({ error: error.message || 'Internal Server Error' });
+    }
+  });
+
+  console.log(`✅ Registered Route: ${config.method.toUpperCase()} ${path}`);
 };
 
 // --- REGISTER ROUTES HERE ---
