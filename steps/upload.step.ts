@@ -1,14 +1,14 @@
 import { ApiRouteConfig, Handler } from 'motia';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os'; // <--- IMPORT OS MODULE
+import * as os from 'os'; // Import OS for temp dir
 import { Pinecone } from '@pinecone-database/pinecone';
 import Groq from 'groq-sdk';
 import { pipeline } from '@xenova/transformers';
 import dotenv from 'dotenv';
 import { handler as createLeadHandler } from './salesforce.step.ts';
 
-// --- THE FIX: Direct Internal Import ---
+// --- DIRECT INTERNAL IMPORT FIX ---
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
@@ -30,17 +30,22 @@ export const config: ApiRouteConfig = {
 let extractor: any = null;
 
 export const handler: Handler = async (req, { logger, emit }) => {
+  // 1. Debug Log: See exactly what keys the frontend is sending
+  console.log("Incoming Body Keys:", Object.keys(req.body));
+  
   const { fileId, fileName, chunkIndex, totalChunks, dataBase64 } = req.body;
 
-  // FIX: Use os.tmpdir() instead of process.cwd()
-  // This points to a safe "temp" folder on both Mac/Windows and Linux (Render)
+  // 2. SAFETY CHECK: Prevent crash if fileName is undefined
+  const nameToUse = fileName || "unknown_document.pdf";
+
+  // 3. STORAGE FIX: Use os.tmpdir() for Render compatibility
   const uploadDir = path.join(os.tmpdir(), 'motia_uploads');
-  
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
 
-  const safeFileName = `${fileId}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  // 4. Safe Filename Creation
+  const safeFileName = `${fileId}-${nameToUse.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
   const filePath = path.join(uploadDir, safeFileName);
 
   try {
@@ -51,8 +56,7 @@ export const handler: Handler = async (req, { logger, emit }) => {
     }
     
     fs.appendFileSync(filePath, buffer);
-    // Use logger to debug where files are going (helps troubleshooting)
-    logger.info(`📝 Chunk ${chunkIndex + 1}/${totalChunks} written to ${filePath}`);
+    logger.info(`📝 Chunk ${chunkIndex + 1}/${totalChunks} written for ${nameToUse}`);
 
     if (chunkIndex === totalChunks - 1) {
       logger.info('✅ Upload finished! Starting AI Processing...');
@@ -139,7 +143,6 @@ export const handler: Handler = async (req, { logger, emit }) => {
       await emit({ topic: 'file.uploaded', data: eventPayload });
       
       // Cleanup: Delete the temp file to save space on Render
-      // (Optional but good practice)
       try {
         fs.unlinkSync(filePath);
       } catch(e) {
