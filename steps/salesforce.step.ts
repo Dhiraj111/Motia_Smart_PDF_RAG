@@ -1,5 +1,5 @@
 import { ApiRouteConfig, Handler } from 'motia';
-import axios from 'axios';
+import axios from 'axios'; 
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -39,7 +39,7 @@ export const config: ApiRouteConfig = {
 
 // --- STEP HANDLER ---
 export const handler: Handler = async (req, { logger }) => {
-    const { name, email, company, summary } = req.body;
+    const { name, email, phone, company, summary } = req.body;
 
     // Validation
     if (!name || !email) {
@@ -62,6 +62,7 @@ export const handler: Handler = async (req, { logger }) => {
                 LastName: name,
                 Company: company || 'Unknown Company',
                 Email: email,
+                Phone : phone,
                 Description: summary || 'Lead generated via Motia Smart PDF',
                 LeadSource: 'Web'
             },

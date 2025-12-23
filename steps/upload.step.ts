@@ -115,7 +115,7 @@ export const handler: Handler = async (req, context) => {
       const extractionPrompt = `
         Extract the following details from the resume text below.
         Return ONLY a raw JSON object. Do not add markdown formatting.
-        Fields: "name", "email", "company" (current or last company), "summary" (3 sentences).
+        Fields: "name", "email", "phone", "company" (current or last company), "summary" (3 sentences).
         
         Resume Text:
         ${text.substring(0, 3000)}
@@ -127,7 +127,7 @@ export const handler: Handler = async (req, context) => {
       });
 
       const rawJson = completion.choices[0]?.message?.content || "{}";
-      let candidateData = { name: "Unknown", email: "unknown@example.com", company: "", summary: "" };
+      let candidateData = { name: "Unknown", email: "unknown@example.com", phone: "", company: "", summary: "" };
       
       try {
         const cleanJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -146,6 +146,7 @@ export const handler: Handler = async (req, context) => {
             body: {
               name: candidateData.name,
               email: candidateData.email,
+              phone: candidateData.phone,
               company: candidateData.company,
               summary: candidateData.summary
             } 
