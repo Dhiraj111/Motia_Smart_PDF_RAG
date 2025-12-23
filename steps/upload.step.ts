@@ -30,16 +30,29 @@ export const config: ApiRouteConfig = {
 let extractor: any = null;
 
 export const handler: Handler = async (req, { logger, emit }) => {
-  // 1. Debug Log: See exactly what keys the frontend is sending
-  console.log("Incoming Body Keys:", Object.keys(req.body));
+  // 1. DEBUG LOG: See exactly what keys the frontend is sending
+  const receivedKeys = Object.keys(req.body);
+  console.log("🔍 Incoming Body Keys:", receivedKeys);
   
   const { fileId, fileName, chunkIndex, totalChunks, dataBase64 } = req.body;
 
-  // 2. SAFETY CHECK: Prevent crash if fileName is undefined
-  const nameToUse = fileName || "unknown_document.pdf";
+  // 2. CRITICAL SAFETY CHECK: Stop crash if dataBase64 is missing
+  if (!dataBase64) {
+    logger.error(`❌ Missing 'dataBase64'. Received keys: ${receivedKeys.join(", ")}`);
+    return { 
+      status: 400, 
+      body: { 
+        error: "Missing 'dataBase64'", 
+        receivedKeys: receivedKeys,
+        hint: "Check your frontend axios.post call. Key must be 'dataBase64'."
+      } 
+    };
+  }
 
   // 3. STORAGE FIX: Use os.tmpdir() for Render compatibility
+  const nameToUse = fileName || "unknown_document.pdf";
   const uploadDir = path.join(os.tmpdir(), 'motia_uploads');
+  
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
@@ -49,6 +62,7 @@ export const handler: Handler = async (req, { logger, emit }) => {
   const filePath = path.join(uploadDir, safeFileName);
 
   try {
+    // Now safe to convert because we checked it exists above
     const buffer = Buffer.from(dataBase64, 'base64');
 
     if (chunkIndex === 0 && fs.existsSync(filePath)) {

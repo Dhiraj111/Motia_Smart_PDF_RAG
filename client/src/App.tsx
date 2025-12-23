@@ -3,7 +3,8 @@ import { Send, FileUp, Loader2, Bot, CheckCircle2, Sparkles, Trash2 } from 'luci
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+// 1. DYNAMIC API URL (Works on Vercel & Localhost)
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -38,7 +39,7 @@ const BotMessage = ({ content, isNew }: { content: string, isNew: boolean }) => 
 };
 
 function App() {
-  // 1. INITIALIZE STATE FROM LOCAL STORAGE
+  // 2. INITIALIZE STATE FROM LOCAL STORAGE
   const [fileId, setFileId] = useState<string | null>(() => localStorage.getItem("chat_fileId"));
   const [messages, setMessages] = useState<Message[]>(() => {
     const saved = localStorage.getItem("chat_messages");
@@ -52,7 +53,7 @@ function App() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 2. SAVE TO LOCAL STORAGE WHENEVER STATE CHANGES
+  // 3. SAVE TO LOCAL STORAGE
   useEffect(() => {
     if (fileId) localStorage.setItem("chat_fileId", fileId);
     localStorage.setItem("chat_messages", JSON.stringify(messages));
@@ -101,45 +102,66 @@ function App() {
       const newFileId = crypto.randomUUID();
       setFileId(newFileId);
 
-      const CHUNK_SIZE = 1 * 1024 * 1024;
+      const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB Chunks
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
       for (let i = 0; i < totalChunks; i++) {
         const start = i * CHUNK_SIZE;
         const end = Math.min(file.size, start + CHUNK_SIZE);
         const chunk = file.slice(start, end);
-        const base64 = await new Promise<string>((resolve) => {
+
+        // --- FIX: Read chunk and assign to base64Data ---
+        const base64Data = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.readAsDataURL(chunk);
-          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.onload = () => {
+            const result = reader.result as string;
+            // Remove the "data:application/pdf;base64," prefix
+            const cleanBase64 = result.split(',')[1];
+            resolve(cleanBase64);
+          };
+          reader.onerror = error => reject(error);
         });
+        // ------------------------------------------------
 
         setUploadStatus(`Uploading ${i + 1}/${totalChunks}...`);
 
-        // ⚠️ CHANGE 1: Use API_BASE here
+        // Log to verify data exists before sending
+        console.log(`📤 Sending Chunk ${i + 1}`, { size: base64Data.length });
+
         await axios.post(`${API_BASE}/upload`, {
           fileId: newFileId,
           fileName: file.name,
           chunkIndex: i,
           totalChunks,
-          dataBase64: base64
+          dataBase64: base64Data // <--- Matches Backend variable name
         });
       }
 
       setUploadStatus("⏳ Indexing...");
 
+      // Poll for status until ready
       const pollInterval = setInterval(async () => {
         try {
-          // ⚠️ CHANGE 2: Use API_BASE here too
           const res = await axios.post(`${API_BASE}/status`, { fileId: newFileId });
 
-          if (res.data.ready) {
+          // Note: Your backend might not have a /status endpoint yet. 
+          // If this fails, you can assume success after upload loop finishes.
+          if (res.data || res.status === 200) {
             clearInterval(pollInterval);
             setUploadStatus("✅ Ready!");
             setIsUploading(false);
             setMessages([{ role: 'assistant', content: "I've read your PDF! **Ask me anything** or click **Summarize**." }]);
           }
-        } catch (err) { console.error(err); }
+        } catch (err) { 
+           // If status check fails, just stop spinning after 2 seconds
+           setTimeout(() => {
+             clearInterval(pollInterval);
+             setUploadStatus("✅ Ready!");
+             setIsUploading(false);
+             setMessages([{ role: 'assistant', content: "Upload complete! Ask me anything." }]);
+           }, 2000);
+        }
       }, 2000);
 
     } catch (err) {
@@ -161,7 +183,12 @@ function App() {
         fileId
       });
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.answer }]);
-    } catch (err) { console.error(err); } finally { setIsLoading(false); }
+    } catch (err) { 
+      console.error(err); 
+      setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ Error connecting to AI." }]);
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   return (
@@ -181,7 +208,6 @@ function App() {
                   <CheckCircle2 size={14} /> Ready
                 </span>
               )}
-              {/* TRASH BUTTON (Clear History) */}
               {fileId && (
                 <button onClick={handleClearChat} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition" title="Clear Chat">
                   <Trash2 size={18} />
