@@ -4,16 +4,13 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// --- HELPER FUNCTION (Moved inside to fix build error) ---
+// --- HELPER: Get Token ---
 async function getSalesforceAccessToken(): Promise<string> {
     const params = new URLSearchParams();
     params.append('grant_type', 'refresh_token');
     params.append('client_id', process.env.SF_CLIENT_ID!);
     params.append('client_secret', process.env.SF_CLIENT_SECRET!);
     params.append('refresh_token', process.env.SF_REFRESH_TOKEN!);
-
-    console.log("DEBUG: Instance URL:", process.env.SF_INSTANCE_URL);
-    console.log("DEBUG: Refresh Token:", process.env.SF_REFRESH_TOKEN ? "Exists" : "Missing");
 
     try {
         const response = await axios.post(
@@ -25,6 +22,27 @@ async function getSalesforceAccessToken(): Promise<string> {
     } catch (error: any) {
         console.error("❌ Failed to refresh token:", error.response?.data || error.message);
         throw new Error("Could not authenticate with Salesforce");
+    }
+}
+
+// --- HELPER: Check for Duplicate Lead ---
+async function findLeadByEmail(email: string, token: string): Promise<string | null> {
+    try {
+        // SOQL Query to find ID where Email matches
+        const query = `SELECT Id FROM Lead WHERE Email = '${email}' LIMIT 1`;
+        const url = `${process.env.SF_INSTANCE_URL}/services/data/v58.0/query?q=${encodeURIComponent(query)}`;
+        
+        const response = await axios.get(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.data.totalSize > 0) {
+            return response.data.records[0].Id; // Found existing ID
+        }
+        return null; // No duplicate found
+    } catch (error) {
+        console.warn("⚠️ Error checking duplicates (proceeding to create):", error);
+        return null;
     }
 }
 
@@ -49,20 +67,37 @@ export const handler: Handler = async (req, { logger }) => {
         };
     }
 
-    logger.info(`[Salesforce] Creating lead for ${name}...`);
-
     try {
-        // 1. Get Token using the internal helper
+        // 1. Get Token
         const token = await getSalesforceAccessToken();
 
-        // 2. Send to Salesforce
+        // 2. CHECK FOR DUPLICATES (The Fix)
+        const existingLeadId = await findLeadByEmail(email, token);
+        
+        if (existingLeadId) {
+            logger.info(`[Salesforce] Lead already exists for ${email}. ID: ${existingLeadId}`);
+            return {
+                status: 200,
+                body: {
+                    success: true,
+                    message: "Lead already exists. Skipped creation.",
+                    leadId: existingLeadId,
+                    link: `${process.env.SF_INSTANCE_URL}/${existingLeadId}`,
+                    isDuplicate: true
+                }
+            };
+        }
+
+        // 3. Create New Lead (Only if not found)
+        logger.info(`[Salesforce] Creating NEW lead for ${name}...`);
+        
         const response = await axios.post(
             `${process.env.SF_INSTANCE_URL}/services/data/v58.0/sobjects/Lead`,
             {
                 LastName: name,
                 Company: company || 'Unknown Company',
                 Email: email,
-                Phone : phone,
+                Phone: phone,
                 Description: summary || 'Lead generated via Motia Smart PDF',
                 LeadSource: 'Web'
             },
@@ -82,7 +117,8 @@ export const handler: Handler = async (req, { logger }) => {
                 success: true,
                 message: "Successfully saved to Salesforce.",
                 leadId: response.data.id,
-                link: `${process.env.SF_INSTANCE_URL}/${response.data.id}`
+                link: `${process.env.SF_INSTANCE_URL}/${response.data.id}`,
+                isDuplicate: false
             }
         };
 

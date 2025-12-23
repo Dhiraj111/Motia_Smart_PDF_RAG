@@ -65,18 +65,30 @@ export const handler: Handler = async (req, context) => {
   // 4. Safe Filename Creation
   const safeFileName = `${fileId}-${nameToUse.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
   const filePath = path.join(uploadDir, safeFileName);
+  const lockFilePath = `${filePath}.lock`;
 
   try {
     const buffer = Buffer.from(dataBase64, 'base64');
 
     if (chunkIndex === 0 && fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+      try { fs.unlinkSync(filePath); } catch(e) {}
+      try { fs.unlinkSync(lockFilePath); } catch(e) {}
     }
     
     fs.appendFileSync(filePath, buffer);
     logger.info(`📝 Chunk ${chunkIndex + 1}/${totalChunks} written for ${nameToUse}`);
 
     if (chunkIndex === totalChunks - 1) {
+
+      // 🛑 DUPLICATE PREVENTION CHECK 🛑
+      // If a lock file exists, it means another request is already processing this file.
+      if (fs.existsSync(lockFilePath)) {
+        logger.warn(`⚠️ Duplicate processing request detected for ${fileId}. Skipping.`);
+        return { status: 200, body: { message: 'Already processing' } };
+      }
+
+      // Create a lock file to indicate processing has started
+      fs.writeFileSync(lockFilePath, 'lock');
       logger.info('✅ Upload finished! Starting AI Processing...');
 
       const fullFileBuffer = fs.readFileSync(filePath);
@@ -164,6 +176,7 @@ export const handler: Handler = async (req, context) => {
       // Cleanup: Delete the temp file to save space on Render
       try {
         fs.unlinkSync(filePath);
+        fs.unlinkSync(lockFilePath);
       } catch(e) {
         logger.warn("Could not delete temp file");
       }
@@ -183,6 +196,11 @@ export const handler: Handler = async (req, context) => {
 
   } catch (error: any) {
     logger.error(`❌ Upload/Process Failed: ${error.message}`);
+    // Try to remove lock file on error so user can retry
+    const safeFileName = `${fileId}-${(fileName||"").replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const filePath = path.join(uploadDir, safeFileName);
+    const lockFilePath = `${filePath}.lock`;
+    try { fs.unlinkSync(lockFilePath); } catch(e) {}
     return { status: 500, body: { error: error.message } };
   }
 };
