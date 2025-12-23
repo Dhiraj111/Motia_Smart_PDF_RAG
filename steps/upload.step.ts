@@ -1,6 +1,7 @@
 import { ApiRouteConfig, Handler } from 'motia';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os'; // <--- IMPORT OS MODULE
 import { Pinecone } from '@pinecone-database/pinecone';
 import Groq from 'groq-sdk';
 import { pipeline } from '@xenova/transformers';
@@ -31,7 +32,10 @@ let extractor: any = null;
 export const handler: Handler = async (req, { logger, emit }) => {
   const { fileId, fileName, chunkIndex, totalChunks, dataBase64 } = req.body;
 
-  const uploadDir = path.join(process.cwd(), 'uploads');
+  // FIX: Use os.tmpdir() instead of process.cwd()
+  // This points to a safe "temp" folder on both Mac/Windows and Linux (Render)
+  const uploadDir = path.join(os.tmpdir(), 'motia_uploads');
+  
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
@@ -47,7 +51,8 @@ export const handler: Handler = async (req, { logger, emit }) => {
     }
     
     fs.appendFileSync(filePath, buffer);
-    logger.info(`📝 Chunk ${chunkIndex + 1}/${totalChunks} written.`);
+    // Use logger to debug where files are going (helps troubleshooting)
+    logger.info(`📝 Chunk ${chunkIndex + 1}/${totalChunks} written to ${filePath}`);
 
     if (chunkIndex === totalChunks - 1) {
       logger.info('✅ Upload finished! Starting AI Processing...');
@@ -55,8 +60,6 @@ export const handler: Handler = async (req, { logger, emit }) => {
       const fullFileBuffer = fs.readFileSync(filePath);
       
       // 1. EXTRACT TEXT
-      // Now using the direct function. 
-      // Note: pdf-parse usually returns a Promise.
       const data = await pdf(fullFileBuffer);
       const text = data.text;
 
@@ -134,6 +137,14 @@ export const handler: Handler = async (req, { logger, emit }) => {
       // 5. Emit Event
       const eventPayload = { filePath, fileId };
       await emit({ topic: 'file.uploaded', data: eventPayload });
+      
+      // Cleanup: Delete the temp file to save space on Render
+      // (Optional but good practice)
+      try {
+        fs.unlinkSync(filePath);
+      } catch(e) {
+        logger.warn("Could not delete temp file");
+      }
       
       return { 
         status: 200, 
