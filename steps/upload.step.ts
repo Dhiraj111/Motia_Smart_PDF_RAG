@@ -1,7 +1,7 @@
 import { ApiRouteConfig, Handler } from 'motia';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os'; // Import OS for temp dir
+import * as os from 'os';
 import { Pinecone } from '@pinecone-database/pinecone';
 import Groq from 'groq-sdk';
 import { pipeline } from '@xenova/transformers';
@@ -11,8 +11,6 @@ import { handler as createLeadHandler } from './salesforce.step.ts';
 // --- DIRECT INTERNAL IMPORT FIX ---
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-
-// Pointing directly to the implementation file to avoid ESM wrapper issues
 const pdf = require('pdf-parse/lib/pdf-parse.js');
 // -------------------------------------
 
@@ -29,7 +27,14 @@ export const config: ApiRouteConfig = {
 // Global cache for embedding model
 let extractor: any = null;
 
-export const handler: Handler = async (req, { logger, emit }) => {
+export const handler: Handler = async (req, context) => {
+  const { logger } = context;
+
+  // 🛡️ SYNTAX FIX: Used 'async function' instead of '=>' to fix build error
+  const emit = context.emit || async function(payload: any) {
+    console.warn(`⚠️ Context.emit is missing. Event '${payload.topic}' was logged but not emitted.`);
+  };
+
   // 1. DEBUG LOG: See exactly what keys the frontend is sending
   const receivedKeys = Object.keys(req.body);
   console.log("🔍 Incoming Body Keys:", receivedKeys);
@@ -62,7 +67,6 @@ export const handler: Handler = async (req, { logger, emit }) => {
   const filePath = path.join(uploadDir, safeFileName);
 
   try {
-    // Now safe to convert because we checked it exists above
     const buffer = Buffer.from(dataBase64, 'base64');
 
     if (chunkIndex === 0 && fs.existsSync(filePath)) {
@@ -152,7 +156,7 @@ export const handler: Handler = async (req, { logger, emit }) => {
         logger.info("[Salesforce] Skipped: No email found.");
       }
 
-      // 5. Emit Event
+      // 5. Emit Event (Now Safe!)
       const eventPayload = { filePath, fileId };
       await emit({ topic: 'file.uploaded', data: eventPayload });
       
